@@ -10,31 +10,26 @@
     </script>
     
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script>
+    <script>
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   OneSignalDeferred.push(async function(OneSignal) {
     await OneSignal.init({
       appId: "22ed1064-75f6-4be9-b034-e7facc2b03eb",
-      safari_web_id: "your_safari_web_id_if_any", // Optional
+      allowLocalhostAsSecureOrigin: true, // Useful for testing on your Ubuntu PC
       notifyButton: {
-        enable: true, // This enables the bell icon
+        enable: true,
         size: 'medium',
         theme: 'default',
         position: 'bottom-right',
-        offset: {
-          bottom: '20px',
-          right: '20px'
-        },
+        offset: { bottom: '20px', right: '20px' },
         text: {
-  'tip.state.unsubscribed': 'Subscribe to journey updates',
-  'tip.state.subscribed': "Subscription Confirmed",
-  'message.prenotify': 'Click to receive real-time updates on new adventures',
-  'action.subscribe': 'SUBSCRIBE',
-  'action.unsubscribe': 'UNSUBSCRIBE',
-  'dialog.main.title': 'Manage Journey Notifications',
-  'dialog.main.button.subscribe': 'SUBSCRIBE',
-  'dialog.main.button.unsubscribe': 'UNSUBSCRIBE'
-}
+          'tip.state.unsubscribed': 'Subscribe to journey updates',
+          'tip.state.subscribed': "Subscription Confirmed",
+          'message.prenotify': 'Click to receive real-time updates on new adventures',
+          'action.subscribe': 'SUBSCRIBE',
+          'action.unsubscribe': 'UNSUBSCRIBE',
+          'dialog.main.title': 'Manage Journey Notifications',
+        }
       },
     });
   });
