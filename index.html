@@ -15,6 +15,22 @@
   OneSignalDeferred.push(async function(OneSignal) {
     await OneSignal.init({
       appId: "22ed1064-75f6-4be9-b034-e7facc2b03eb",
+      safari_web_id: "your_safari_web_id_if_any", // Optional
+      notifyButton: {
+        enable: true, // This enables the bell icon
+        size: 'medium',
+        theme: 'default',
+        position: 'bottom-right',
+        offset: {
+          bottom: '20px',
+          right: '20px'
+        },
+        text: {
+          'tip.state.unsubscribed': 'Subscribe to journey updates',
+          'tip.state.subscribed': "You're subscribed!",
+          'message.prenotify': 'Click to subscribe to adventure updates',
+        }
+      },
     });
   });
 </script>
