@@ -78,6 +78,8 @@
             const [isFilterOpen, setIsFilterOpen] = useState(false);
             const [viewingArticle, setViewingArticle] = useState(null);
             const [isArticleOpen, setIsArticleOpen] = useState(false);
+            const [likes, setLikes] = useState({}); // { location_id: count }
+            const [comments, setComments] = useState({}); // { location_id: [list_of_comments] }
 
             useEffect(() => { 
                 fetchPlaces(); 
@@ -107,9 +109,41 @@
             };
 
             const fetchPlaces = async () => {
-                const { data, error } = await supabaseClient.from('travel_bucket_list').select('*').eq('status', 'done').order('created_at', { ascending: false });
-                setPlaces(data || []);
-            };
+    const { data, error } = await supabaseClient
+        .from('travel_bucket_list')
+        .select('*')
+        .eq('status', 'done')
+        .order('created_at', { ascending: false });
+    
+    if (data) {
+        setPlaces(data);
+        // Fetch Likes and Comments count for all places
+        fetchInteractions();
+    }
+};
+
+const fetchInteractions = async () => {
+    // Fetch Like counts
+    const { data: allLikes } = await supabaseClient.from('location_likes').select('location_id');
+    const likeCounts = allLikes?.reduce((acc, curr) => {
+        acc[curr.location_id] = (acc[curr.location_id] || 0) + 1;
+        return acc;
+    }, {});
+    setLikes(likeCounts || {});
+
+    // Fetch all comments
+    const { data: allComments } = await supabaseClient
+        .from('location_comments')
+        .select('*')
+        .order('created_at', { ascending: true });
+        
+    const groupedComments = allComments?.reduce((acc, curr) => {
+        if (!acc[curr.location_id]) acc[curr.location_id] = [];
+        acc[curr.location_id].push(curr);
+        return acc;
+    }, {});
+    setComments(groupedComments || {});
+};
 
             const calculateDistance = (lat2, lon2) => {
                 const ref = userCoords || DEFAULT_LOCATION;
@@ -119,6 +153,53 @@
                 const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(ref.lat * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
                 return (R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)))).toFixed(1);
             };
+            
+            const handleLike = async (locationId) => {
+    try {
+        const { error } = await supabaseClient
+            .from('location_likes')
+            .insert([{ location_id: locationId }]);
+        
+        if (!error) {
+            // Update local state immediately for a snappy feel
+            setLikes(prev => ({ ...prev, [locationId]: (prev[locationId] || 0) + 1 }));
+        }
+    } catch (e) { console.error("Error liking location", e); }
+};
+
+const submitComment = async (locationId, text) => {
+    try {
+        const { data, error } = await supabaseClient
+            .from('location_comments')
+            .insert([{ 
+                location_id: locationId, 
+                comment_text: text 
+            }])
+            .select();
+
+        if (error) throw error;
+
+        if (data) {
+            // Update local state so the comment appears immediately
+            setComments(prev => ({
+                ...prev,
+                [locationId]: [...(prev[locationId] || []), data[0]]
+            }));
+        }
+    } catch (e) {
+        console.error("Comment failed:", e.message);
+        alert("Check your Supabase RLS policies!");
+    }
+};
+
+useEffect(() => { 
+    fetchPlaces(); 
+    getUserLocation();
+    logVisit();
+    fetchInteractions(); // Add this line
+}, []);
+
+
             
             
 
@@ -192,38 +273,69 @@
                     <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
                             {filteredAndSortedPlaces.map(place => (
-                                <div key={place.id} className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl">
-                                    <div className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
-                                        {place.cover_photo_url && <img src={place.cover_photo_url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                                        <div className="absolute bottom-3 left-4 pr-4">
-                                            <h3 className="text-white text-xs md:text-sm font-extrabold text-shadow leading-tight uppercase tracking-tight">{auditLocationName(place.place_name)}</h3>
-                                        </div>
-                                    </div>
-                                    <div className="p-4 flex flex-col flex-1">
-                                        <div className="flex justify-between items-center mb-4 text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                            <span>{calculateDistance(place.latitude, place.longitude)} KM</span>
-                                            <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100">{place.category}</span>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2 mt-auto">
-                                            <button 
-    onClick={() => {
-        // Use the database URL if it exists, otherwise fallback to a lat/lng search
-        const mapsUrl = place.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`;
-        window.open(mapsUrl, '_blank');
-    }} 
-    className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100"
->
-    Maps
-</button>
-                                            <button onClick={() => window.open(place.photo_album_url, '_blank')} disabled={!place.photo_album_url} className={`py-2.5 rounded-xl text-[8px] font-black uppercase ${place.photo_album_url ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}>Album</button>
-                                            {place.ai_article && (
-                                                <button onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase shadow-md animate-pulse">Read</button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+    <div key={place.id} className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl">
+        <div className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
+            {place.cover_photo_url && <img src={place.cover_photo_url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+            <div className="absolute bottom-3 left-4 pr-4">
+                <h3 className="text-white text-xs md:text-sm font-extrabold text-shadow leading-tight uppercase tracking-tight">{auditLocationName(place.place_name)}</h3>
+            </div>
+        </div>
+        
+        <div className="p-4 flex flex-col flex-1">
+            <div className="flex justify-between items-center mb-3 text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                <span>{calculateDistance(place.latitude, place.longitude)} KM</span>
+                <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100">{place.category}</span>
+            </div>
+
+            {/* Interactive Stats Bar */}
+            <div className="flex items-center gap-4 mb-4 px-1">
+                <button 
+                    onClick={() => handleLike(place.id)}
+                    className="flex items-center gap-1.5 group transition-colors"
+                >
+                    <i data-lucide="heart" className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 group-hover:fill-rose-500 transition-all"></i>
+                    <span className="text-[9px] font-black text-slate-400 group-hover:text-slate-600">{likes[place.id] || 0}</span>
+                </button>
+
+                <button 
+                    onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }}
+                    className="flex items-center gap-1.5 group transition-colors"
+                >
+                    <i data-lucide="message-circle" className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-500 transition-all"></i>
+                    <span className="text-[9px] font-black text-slate-400 group-hover:text-slate-600">{comments[place.id]?.length || 0}</span>
+                </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-auto">
+                <button 
+                    onClick={() => {
+                        const mapsUrl = place.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`;
+                        window.open(mapsUrl, '_blank');
+                    }} 
+                    className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100 hover:bg-slate-100 transition-colors"
+                >
+                    Maps
+                </button>
+                <button 
+                    onClick={() => window.open(place.photo_album_url, '_blank')} 
+                    disabled={!place.photo_album_url} 
+                    className={`py-2.5 rounded-xl text-[8px] font-black uppercase transition-all ${place.photo_album_url ? 'bg-blue-600 text-white shadow-md hover:bg-blue-700' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
+                >
+                    Album
+                </button>
+                {place.ai_article && (
+                    <button 
+                        onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} 
+                        className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase shadow-md hover:bg-emerald-700 transition-all"
+                    >
+                        Read
+                    </button>
+                )}
+            </div>
+        </div>
+    </div>
+))}
                         </div>
                     </div>
 
@@ -267,21 +379,72 @@
 
                     {/* Immersive Article Modal */}
                     {isArticleOpen && viewingArticle && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsArticleOpen(false)}></div>
-                            <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                                <img src={viewingArticle.cover_photo_url} className="h-48 w-full object-cover" />
-                                <div className="p-8 overflow-y-auto scrollable-list">
-                                    <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">{auditLocationName(viewingArticle.place_name)}</h2>
-                                    <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase mb-6">{viewingArticle.category}</span>
-                                    <p className="text-slate-600 leading-relaxed first-letter:text-5xl first-letter:font-black first-letter:mr-2 first-letter:float-left">
-                                        {viewingArticle.ai_article}
-                                    </p>
-                                    <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Back to Log</button>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsArticleOpen(false)}></div>
+        <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <img src={viewingArticle.cover_photo_url} className="h-48 w-full object-cover" />
+            <div className="p-8 overflow-y-auto scrollable-list">
+                <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">{auditLocationName(viewingArticle.place_name)}</h2>
+                <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase mb-6">{viewingArticle.category}</span>
+                
+                <p className="text-slate-600 leading-relaxed first-letter:text-5xl first-letter:font-black first-letter:mr-2 first-letter:float-left mb-10">
+                    {viewingArticle.ai_article}
+                </p>
+
+                {/* Comment Section */}
+                <div className="mt-10 pt-8 border-t border-slate-100">
+                    <div className="flex items-center gap-2 mb-6">
+                        <i data-lucide="message-circle" className="w-4 h-4 text-slate-900"></i>
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-900">Discussions</h3>
+                    </div>
+                    
+                    {/* Comment Feed */}
+                    <div className="space-y-4 mb-8">
+                        {(comments[viewingArticle.id] || []).length > 0 ? (
+                            (comments[viewingArticle.id] || []).map((c, i) => (
+                                <div key={i} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                    <p className="text-xs text-slate-600 leading-relaxed font-medium">{c.comment_text}</p>
+                                    <div className="flex justify-between items-center mt-3">
+                                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter">
+                                            {new Date(c.created_at).toLocaleDateString()}
+                                        </span>
+                                    </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="py-8 text-center border-2 border-dashed border-slate-50 rounded-3xl">
+                                <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">No comments yet. Start the conversation!</p>
                             </div>
+                        )}
+                    </div>
+
+                    {/* New Comment Input */}
+                    <div className="relative group">
+                        <input 
+                            type="text" 
+                            placeholder="Share your thoughts..." 
+                            className="w-full bg-slate-100 border-2 border-transparent focus:border-slate-900 focus:bg-white rounded-2xl px-5 py-4 text-xs font-bold transition-all outline-none pr-12"
+                            onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && e.target.value.trim()) {
+                                    const text = e.target.value;
+                                    e.target.value = ''; 
+                                    await submitComment(viewingArticle.id, text);
+                                }
+                            }}
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                            <i data-lucide="send" className="w-4 h-4 text-slate-400 group-focus-within:text-slate-900"></i>
                         </div>
-                    )}
+                    </div>
+                </div>
+
+                <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg hover:bg-slate-800 transition-colors">
+                    Back to Log
+                </button>
+            </div>
+        </div>
+    </div>
+)}
                 </div>
             );
         }
