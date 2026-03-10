@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Adventure Journal - Viewer</title>
@@ -14,16 +12,25 @@
     <script src="https://unpkg.com/lucide@latest"></script>    
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
     <script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-VRVQHWP2BJ', {
-    'cookie_domain': 'auto',
-    'cookie_flags': 'SameSite=None;Secure'
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-VRVQHWP2BJ', {
+        'cookie_domain': 'auto',
+        'cookie_flags': 'SameSite=None;Secure'
+      });
+    </script>
+    
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    
+    <script>
+     window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+      appId: "22ed1064-75f6-4be9-b034-e7facc2b03eb",
+    });
   });
-</script>
-
+   </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
@@ -57,15 +64,13 @@
             const [filterTag, setFilterTag] = useState('All');
             const [sortBy, setSortBy] = useState('recent');
             const [userCoords, setUserCoords] = useState(null);
-            const [isFilterOpen, setIsFilterOpen] = useState(false);
             const [viewingArticle, setViewingArticle] = useState(null);
             const [isArticleOpen, setIsArticleOpen] = useState(false);
             const [likes, setLikes] = useState({}); 
             const [comments, setComments] = useState({}); 
+            const [newCommentText, setNewCommentText] = useState('');
 
-            useEffect(() => { 
-                initApp();
-            }, []);
+            useEffect(() => { initApp(); }, []);
 
             const initApp = async () => {
                 await fetchPlaces();
@@ -79,78 +84,84 @@
             }, [places, searchTerm, filterTag, sortBy, isArticleOpen, comments]);
 
             const fetchPlaces = async () => {
-                const { data } = await supabaseClient.from('travel_bucket_list').select('*').eq('status', 'done').order('created_at', { ascending: false });
+                const { data } = await supabaseClient
+                    .from('travel_bucket_list')
+                    .select('*')
+                    .eq('status', 'done')
+                    .order('created_at', { ascending: false });
                 setPlaces(data || []);
             };
 
             const fetchInteractions = async () => {
-                // Load Likes
-                const { data: likeData } = await supabaseClient.from('location_likes').select('location_id');
-                const likeCounts = likeData?.reduce((acc, curr) => {
-                    acc[curr.location_id] = (acc[curr.location_id] || 0) + 1;
-                    return acc;
-                }, {});
-                setLikes(likeCounts || {});
+                const { data: likeData, error: likeError } = await supabaseClient
+                    .from('location_likes')
+                    .select('location_id');
 
-                // Load Comments
-                const { data: commentData } = await supabaseClient.from('location_comments').select('*').order('created_at', { ascending: true });
-                const grouped = commentData?.reduce((acc, curr) => {
-                    if (!acc[curr.location_id]) acc[curr.location_id] = [];
-                    acc[curr.location_id].push(curr);
-                    return acc;
-                }, {});
-                setComments(grouped || {});
+                if (likeError) {
+                    console.error("Supabase Error (location_likes):", likeError.message);
+                } else {
+                    const likeCounts = likeData?.reduce((acc, curr) => {
+                        acc[curr.location_id] = (acc[curr.location_id] || 0) + 1;
+                        return acc;
+                    }, {});
+                    setLikes(likeCounts || {});
+                }
+
+                const { data: commentData, error: commentError } = await supabaseClient
+                    .from('location_comments')
+                    .select('*')
+                    .order('created_at', { ascending: true });
+
+                if (commentError) {
+                    console.error("Supabase Error (location_comments):", commentError.message);
+                } else {
+                    const grouped = commentData?.reduce((acc, curr) => {
+                        if (!acc[curr.location_id]) acc[curr.location_id] = [];
+                        acc[curr.location_id].push(curr);
+                        return acc;
+                    }, {});
+                    setComments(grouped || {});
+                }
             };
 
             const handleLike = async (locationId) => {
-                const { error } = await supabaseClient.from('location_likes').insert([{ location_id: locationId }]);
+                const { error } = await supabaseClient
+                    .from('location_likes')
+                    .insert([{ location_id: locationId }]);
                 if (!error) setLikes(prev => ({ ...prev, [locationId]: (prev[locationId] || 0) + 1 }));
             };
 
-  const submitComment = async (locationId, text) => {
-    // 1. Log attempt for debugging
-    console.log("Attempting to submit comment for:", locationId);
-
-    const { data, error, status } = await supabaseClient
+            const submitComment = async (locationId, text) => {
+    // Attempt to insert the comment into the database
+    const { data, error } = await supabaseClient
         .from('location_comments')
         .insert([{ 
             location_id: locationId, 
             comment_text: text 
         }])
-        .select(); // Essential to get the new ID and timestamp back
+        .select();
 
+    // Explicitly log the error to the console if it fails
     if (error) {
-        console.error("Detailed Supabase Error:", error.message, error.details);
-        alert("Failed to save: " + error.message);
+        console.error("Supabase Insert Error:", error.message, error.details);
+        alert("Failed to post comment. Check console for details.");
         return;
     }
 
-    // 2. Update local React state immediately
+    // Only update the local UI state if the database confirmed the save
     if (data && data.length > 0) {
-        console.log("Success! Data returned:", data[0]);
         setComments(prev => ({
             ...prev,
             [locationId]: [...(prev[locationId] || []), data[0]]
         }));
-    } else {
-        console.warn("Insert succeeded but no data returned. Check if .select() is working.");
     }
 };
 
             const logVisit = async () => {
-    try { 
-        const { error } = await supabaseClient
-            .from('page_visits')
-            .insert([{ 
-                page_path: 'adventure_journal_index', 
-                user_agent: navigator.userAgent 
-            }]);
-        
-        if (error) console.warn("Supabase Log Insight:", error.message);
-    } catch (e) {
-        // Silently fail so it doesn't interrupt the user experience
-    }
-};
+                try { 
+                    await supabaseClient.from('page_visits').insert([{ page_path: 'adventure_journal_index', user_agent: navigator.userAgent }]);
+                } catch (e) { console.warn("Log skip:", e); }
+            };
 
             const getUserLocation = () => {
                 if (navigator.geolocation) {
@@ -189,9 +200,6 @@
                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Shared Feed</p>
                             </div>
                         </div>
-                        <button onClick={() => setIsFilterOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase md:hidden">
-                            <i data-lucide="sliders-horizontal" className="w-3 h-3 text-orange-400"></i> Filters
-                        </button>
                     </header>
 
                     <div className="hidden md:block bg-white p-5 mx-10 rounded-3xl shadow-xl border mb-6">
@@ -232,14 +240,20 @@
                                                 <i data-lucide="heart" className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 group-hover:fill-rose-500"></i>
                                                 <span className="text-[9px] font-black text-slate-400">{likes[place.id] || 0}</span>
                                             </button>
-                                            <button onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} className="flex items-center gap-1.5 group transition-colors">
-                                                <i data-lucide="message-circle" className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-500"></i>
+                                            <div className="flex items-center gap-1.5">
+                                                <i data-lucide="message-square" className="w-3.5 h-3.5 text-slate-300"></i>
                                                 <span className="text-[9px] font-black text-slate-400">{comments[place.id]?.length || 0}</span>
-                                            </button>
+                                            </div>
                                         </div>
 
                                         <div className="grid grid-cols-3 gap-2 mt-auto">
-                                            <button onClick={() => window.open(place.google_maps_url || `https://maps.google.com/?q=${place.latitude},${place.longitude}`, '_blank')} className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100">Maps</button>
+                                            <button 
+                                                onClick={() => window.open(
+                                                    place.google_maps_url || `https://www.google.com/maps?q=${place.latitude},${place.longitude}`, 
+                                                    '_blank'
+                                                )} 
+                                                className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100"
+                                            >Maps</button>
                                             <button onClick={() => window.open(place.photo_album_url, '_blank')} disabled={!place.photo_album_url} className={`py-2.5 rounded-xl text-[8px] font-black uppercase ${place.photo_album_url ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}>Album</button>
                                             {place.ai_article && <button onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase">Read</button>}
                                         </div>
@@ -257,30 +271,55 @@
                                 <div className="p-8 overflow-y-auto scrollable-list">
                                     <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">{auditLocationName(viewingArticle.place_name)}</h2>
                                     <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase mb-6">{viewingArticle.category}</span>
+                                    
                                     <p className="text-slate-600 leading-relaxed mb-10">{viewingArticle.ai_article}</p>
 
-                                    <div className="mt-10 pt-8 border-t border-slate-100">
-                                        <h3 className="text-[10px] font-black uppercase tracking-widest mb-6">Discussions</h3>
-                                        <div className="space-y-4 mb-8">
-                                            {(comments[viewingArticle.id] || []).map((c, i) => (
-                                                <div key={i} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                                    <p className="text-xs text-slate-600 font-medium">{c.comment_text}</p>
-                                                    <span className="text-[8px] font-black text-slate-300 uppercase mt-2 block">{new Date(c.created_at).toLocaleDateString()}</span>
+                                    <div className="border-t border-slate-100 pt-8">
+                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Discussion ({comments[viewingArticle.id]?.length || 0})</h4>
+                                        <div className="space-y-4 mb-6">
+                                            {comments[viewingArticle.id]?.map((c, i) => (
+                                                <div key={i} className="bg-slate-50 p-4 rounded-2xl">
+                                                    <p className="text-xs text-slate-700 font-semibold">{c.comment_text}</p>
+                                                    <span className="text-[8px] font-bold text-slate-400 uppercase mt-2 block">{new Date(c.created_at).toLocaleDateString()}</span>
                                                 </div>
                                             ))}
+                                            {(!comments[viewingArticle.id] || comments[viewingArticle.id].length === 0) && (
+                                                <p className="text-[9px] font-bold text-slate-300 uppercase italic">No comments yet. Be the first!</p>
+                                            )}
                                         </div>
                                         <div className="relative group">
-                                            <input type="text" placeholder="Share your thoughts..." className="w-full bg-slate-100 rounded-2xl px-5 py-4 text-xs font-bold focus:bg-white border-2 border-transparent focus:border-slate-900 outline-none pr-12"
-                                                onKeyDown={async (e) => {
-                                                    if (e.key === 'Enter' && e.target.value.trim()) {
-                                                        const val = e.target.value; e.target.value = ''; await submitComment(viewingArticle.id, val);
-                                                    }
-                                                }}
-                                            />
-                                            <div className="absolute right-4 top-1/2 -translate-y-1/2"><i data-lucide="send" className="w-4 h-4 text-slate-400"></i></div>
-                                        </div>
+    <input 
+        type="text" 
+        value={newCommentText}
+        onChange={(e) => setNewCommentText(e.target.value)}
+        placeholder="Share your thoughts..." 
+        className="w-full bg-slate-100 border-2 border-transparent focus:border-slate-900 focus:bg-white rounded-2xl px-5 py-4 text-xs font-bold transition-all outline-none pr-12"
+        onKeyDown={async (e) => {
+            if (e.key === 'Enter' && newCommentText.trim()) {
+                const textToSubmit = newCommentText;
+                setNewCommentText(''); // Clear UI immediately
+                await submitComment(viewingArticle.id, textToSubmit);
+            }
+        }}
+    />
+    <button 
+        onClick={async () => {
+            if (newCommentText.trim()) {
+                const textToSubmit = newCommentText;
+                setNewCommentText(''); // Clear UI immediately
+                await submitComment(viewingArticle.id, textToSubmit);
+            }
+        }}
+        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 focus:outline-none"
+    >
+        <i data-lucide="send" className="w-4 h-4 text-slate-400 hover:text-slate-900 transition-colors"></i>
+    </button>
+</div>
                                     </div>
-                                    <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Back to Log</button>
+
+                                    <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg hover:bg-slate-800 transition-colors">
+                                        Back to Log
+                                    </button>
                                 </div>
                             </div>
                         </div>
