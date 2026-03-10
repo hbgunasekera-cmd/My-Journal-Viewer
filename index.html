@@ -2,17 +2,6 @@
 <html lang="en">
 <head>
 
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-VRVQHWP2BJ', {
-    'cookie_domain': 'auto',
-    'cookie_flags': 'SameSite=None;Secure'
-  });
-</script>
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -106,11 +95,25 @@
             };
 
             const submitComment = async (locationId, text) => {
-                const { data, error } = await supabaseClient.from('location_comments').insert([{ location_id: locationId, comment_text: text }]).select();
-                if (!error && data) {
-                    setComments(prev => ({ ...prev, [locationId]: [...(prev[locationId] || []), data[0]] }));
-                }
-            };
+    // 1. Send to Supabase
+    const { data, error } = await supabaseClient
+        .from('location_comments')
+        .insert([{ location_id: locationId, comment_text: text }])
+        .select(); // Critical: .select() returns the new record
+
+    if (error) {
+        console.error("Database Error:", error.message);
+        return;
+    }
+
+    if (data && data[0]) {
+        // 2. Immediately update local state so the UI re-renders
+        setComments(prev => ({
+            ...prev,
+            [locationId]: [...(prev[locationId] || []), data[0]]
+        }));
+    }
+};
 
             const logVisit = async () => {
     try { 
