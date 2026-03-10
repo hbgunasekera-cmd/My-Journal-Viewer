@@ -94,25 +94,20 @@
                 if (!error) setLikes(prev => ({ ...prev, [locationId]: (prev[locationId] || 0) + 1 }));
             };
 
-            const submitComment = async (locationId, text) => {
-    // 1. Send to Supabase
+  const submitComment = async (locationId, text) => {
     const { data, error } = await supabaseClient
         .from('location_comments')
         .insert([{ location_id: locationId, comment_text: text }])
-        .select(); // Critical: .select() returns the new record
+        .select(); 
 
     if (error) {
-        console.error("Database Error:", error.message);
+        // This will tell you if the table name or columns are wrong
+        console.error("Supabase Error Details:", error.message, error.details); 
         return;
     }
-
-    if (data && data[0]) {
-        // 2. Immediately update local state so the UI re-renders
-        setComments(prev => ({
-            ...prev,
-            [locationId]: [...(prev[locationId] || []), data[0]]
-        }));
-    }
+    
+    console.log("Success! Saved comment:", data);
+    // ... rest of your state update logic
 };
 
             const logVisit = async () => {
