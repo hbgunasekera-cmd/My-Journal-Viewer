@@ -108,25 +108,32 @@
             };
 
   const submitComment = async (locationId, text) => {
-    const { data, error, status, statusText } = await supabaseClient
-        .from('location_comments')
-        .insert([{ location_id: locationId, comment_text: text }])
-        .select(); 
+    // 1. Log attempt for debugging
+    console.log("Attempting to submit comment for:", locationId);
 
-    // Log the raw status to catch silent non-200 responses
-    console.log("Supabase Status:", status, statusText);
+    const { data, error, status } = await supabaseClient
+        .from('location_comments')
+        .insert([{ 
+            location_id: locationId, 
+            comment_text: text 
+        }])
+        .select(); // Essential to get the new ID and timestamp back
 
     if (error) {
-        alert("Supabase Error: " + error.message); // Force visibility
-        console.error("Detailed Error:", error); 
+        console.error("Detailed Supabase Error:", error.message, error.details);
+        alert("Failed to save: " + error.message);
         return;
     }
-    
-    if (data && data[0]) {
+
+    // 2. Update local React state immediately
+    if (data && data.length > 0) {
+        console.log("Success! Data returned:", data[0]);
         setComments(prev => ({
             ...prev,
             [locationId]: [...(prev[locationId] || []), data[0]]
         }));
+    } else {
+        console.warn("Insert succeeded but no data returned. Check if .select() is working.");
     }
 };
 
