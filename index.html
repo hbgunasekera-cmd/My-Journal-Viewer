@@ -95,17 +95,20 @@
             };
 
   const submitComment = async (locationId, text) => {
-    const { data, error } = await supabaseClient
+    const { data, error, status, statusText } = await supabaseClient
         .from('location_comments')
         .insert([{ location_id: locationId, comment_text: text }])
         .select(); 
 
+    // Log the raw status to catch silent non-200 responses
+    console.log("Supabase Status:", status, statusText);
+
     if (error) {
-        console.error("Supabase Error:", error.message); 
+        alert("Supabase Error: " + error.message); // Force visibility
+        console.error("Detailed Error:", error); 
         return;
     }
     
-    // Add this to update the UI immediately
     if (data && data[0]) {
         setComments(prev => ({
             ...prev,
