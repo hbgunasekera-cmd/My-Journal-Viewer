@@ -101,13 +101,17 @@
         .select(); 
 
     if (error) {
-        // This will tell you if the table name or columns are wrong
-        console.error("Supabase Error Details:", error.message, error.details); 
+        console.error("Supabase Error:", error.message); 
         return;
     }
     
-    console.log("Success! Saved comment:", data);
-    // ... rest of your state update logic
+    // Add this to update the UI immediately
+    if (data && data[0]) {
+        setComments(prev => ({
+            ...prev,
+            [locationId]: [...(prev[locationId] || []), data[0]]
+        }));
+    }
 };
 
             const logVisit = async () => {
