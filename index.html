@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
 
-  gtag('config', 'G-VRVQHWP2BJ');
+  // Configured with SameSite=None and Secure flags to resolve domain rejection errors
+  gtag('config', 'G-VRVQHWP2BJ', { 
+    'cookie_flags': 'SameSite=None;Secure' 
+  });
 </script>
 
     
