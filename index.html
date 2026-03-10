@@ -113,8 +113,19 @@
             };
 
             const logVisit = async () => {
-                try { await supabaseClient.from('page_visits').insert([{ page_path: 'adventure_journal_index', user_agent: navigator.userAgent }]); } catch (e) {}
-            };
+    try { 
+        const { error } = await supabaseClient
+            .from('page_visits')
+            .insert([{ 
+                page_path: 'adventure_journal_index', 
+                user_agent: navigator.userAgent 
+            }]);
+        
+        if (error) console.warn("Supabase Log Insight:", error.message);
+    } catch (e) {
+        // Silently fail so it doesn't interrupt the user experience
+    }
+};
 
             const getUserLocation = () => {
                 if (navigator.geolocation) {
