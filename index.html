@@ -150,57 +150,79 @@
             };
 
             const handleLike = async (locationId) => {
-                const { error } = await supabaseClient
-                    .from('location_likes')
-                    .insert([{ location_id: locationId }]);
-                if (!error) setLikes(prev => ({ ...prev, [locationId]: (prev[locationId] || 0) + 1 }));
-            };
+    const meta = await getInteractionMetadata();
+    const { error } = await supabaseClient
+        .from('location_likes')
+        .insert([{ 
+            location_id: locationId,
+            country: meta.country,
+            city: meta.city
+        }]);
+    if (!error) setLikes(prev => ({ ...prev, [locationId]: (prev[locationId] || 0) + 1 }));
+};
 
             const submitComment = async (locationId, text) => {
-                const { data, error } = await supabaseClient
-                    .from('location_comments')
-                    .insert([{ 
-                        location_id: locationId, 
-                        comment_text: text 
-                    }])
-                    .select();
+    const meta = await getInteractionMetadata();
+    const { data, error } = await supabaseClient
+        .from('location_comments')
+        .insert([{ 
+            location_id: locationId, 
+            comment_text: text,
+            country: meta.country,
+            city: meta.city
+        }])
+        .select();
 
-                if (error) {
-                    console.error("Supabase Insert Error:", error.message, error.details);
-                    alert("Failed to post comment. Check console for details.");
-                    return;
-                }
+    if (error) {
+        console.error("Supabase Insert Error:", error.message);
+        return;
+    }
 
-                if (data && data.length > 0) {
-                    setComments(prev => ({
-                        ...prev,
-                        [locationId]: [...(prev[locationId] || []), data[0]]
-                    }));
-                }
-            };
+    if (data && data.length > 0) {
+        setComments(prev => ({
+            ...prev,
+            [locationId]: [...(prev[locationId] || []), data[0]]
+        }));
+    }
+};
 
-            const logVisit = async () => {
+      const logVisit = async () => {
     try {
-        // Fetch geolocation data based on the visitor's IP address
         const response = await fetch('https://ipapi.co/json/');
         const geo = await response.json();
 
-        // Log the visit with device (userAgent) and regional data
+        // Check if the current user matches your specific session details
+        const isOwner = geo.ip === "2402:4000:b280:b2d:7056:9e2d:f09c:91cb" && 
+                        navigator.userAgent.includes("rv:148.0");
+
+        if (isOwner) {
+            console.log("Owner visit detected. Skipping log.");
+            return;
+        }
+
         await supabaseClient.from('page_visits').insert([{
             page_path: 'adventure_journal_index',
             user_agent: navigator.userAgent,
             country: geo.country_name || 'Unknown',
             region: geo.region || 'Unknown',
             city: geo.city || 'Unknown',
-            ip_address: geo.ip || 'Unknown' // Optional: check your privacy policy
+            ip_address: geo.ip || 'Unknown'
         }]);
     } catch (e) {
-        // Fallback: log the visit even if the geo-fetch fails
-        console.warn("Geo-log failed, falling back to basic log:", e);
-        await supabaseClient.from('page_visits').insert([{
-            page_path: 'adventure_journal_index',
-            user_agent: navigator.userAgent
-        }]);
+        console.warn("Geo-log failed:", e);
+    }
+};
+
+const getInteractionMetadata = async () => {
+    try {
+        const response = await fetch('https://ipapi.co/json/');
+        const geo = await response.json();
+        return {
+            country: geo.country_name || 'Unknown',
+            city: geo.city || 'Unknown'
+        };
+    } catch {
+        return { country: 'Unknown', city: 'Unknown' };
     }
 };
 
