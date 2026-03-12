@@ -163,30 +163,34 @@ const getGoogleToken = () => {
 const handleAlbumClick = async (albumUrl) => {
     if (!albumUrl) return;
     
-    setIsFetchingPhotos(true); // Spinner starts
+    setIsFetchingPhotos(true);
     try {
         let token = accessToken;
+        
+        // If we don't have a token, or the last one failed, get a new one
         if (!token) {
-            token = await getGoogleToken(); // Now unblocks correctly
+            token = await getGoogleToken();
         }
 
         if (token) {
-            // Clean the album ID: remove any trailing slashes or query params
             const cleanAlbumId = albumUrl.split('?')[0].split('/').filter(Boolean).pop();
             const photos = await fetchGooglePhotos(cleanAlbumId, token);
             
             if (photos && photos.length > 0) {
-    setGalleryPhotos(photos);
-    setIsGalleryOpen(true);
-} else {
-    // Alert changed to guide you to the console
-    alert("Could not load photos. Press F12 and check the Console tab for the Google API error.");
-}
+                setGalleryPhotos(photos);
+                setIsGalleryOpen(true);
+            } else {
+                // IMPORTANT: If we got a 403, we must clear the token 
+                // so the next click forces a fresh login.
+                setAccessToken(null); 
+                alert("Access Denied: Please click 'Album' again and make sure to CHECK THE BOX for Google Photos.");
+            }
         }
     } catch (error) {
+        setAccessToken(null); // Clear on error
         console.error("Auth/Gallery Error:", error);
     } finally {
-        setIsFetchingPhotos(false); // Spinner stops regardless of success or failure
+        setIsFetchingPhotos(false);
     }
 };
 
