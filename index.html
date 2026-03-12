@@ -123,18 +123,25 @@
             };
             
 const getGoogleToken = () => {
-    return new Promise((resolve) => {
-        const client = google.accounts.oauth2.initTokenClient({
-            client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
-            scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
-            callback: (response) => {
-                if (response.access_token) {
+    return new Promise((resolve, reject) => {
+        try {
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
+                callback: (response) => {
+                    if (response.error) {
+                        console.error("Auth Error:", response.error);
+                        reject(response.error);
+                        return;
+                    }
                     setAccessToken(response.access_token);
                     resolve(response.access_token);
-                }
-            },
-        });
-        client.requestAccessToken();
+                },
+            });
+            client.requestAccessToken({ prompt: 'select_account' });
+        } catch (err) {
+            reject(err);
+        }
     });
 };
 
