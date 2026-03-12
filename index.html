@@ -135,15 +135,15 @@ const getGoogleToken = () => {
                         return;
                     }
 
-                    // Verify that the Photos permission was actually granted
+                    // CRITICAL: This checks if you actually checked the box
                     const hasScope = google.accounts.oauth2.hasGrantedAllScopes(
                         response,
                         'https://www.googleapis.com/auth/photoslibrary.readonly'
                     );
 
                     if (!hasScope) {
-                        alert("You must check the box for Google Photos access to see the gallery.");
-                        setIsFetchingPhotos(false);
+                        alert("ERROR: You didn't check the Google Photos box! Please try again and check the permission box.");
+                        setAccessToken(null); // Clear the bad token
                         reject("Scope not granted");
                         return;
                     }
@@ -153,14 +153,13 @@ const getGoogleToken = () => {
                 },
             });
             
-            // This forces the consent screen to show the checkboxes
+            // Forces Google to show the checkbox screen every time until you get it right
             client.requestAccessToken({ prompt: 'consent' }); 
         } catch (err) {
             reject(err);
         }
     });
 };
-
 const handleAlbumClick = async (albumUrl) => {
     if (!albumUrl) return;
     
