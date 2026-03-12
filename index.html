@@ -153,26 +153,34 @@ const getGoogleToken = () => {
 };
 
 const handleAlbumClick = async (albumUrl) => {
+    if (!albumUrl) {
+        alert("No album URL found for this location.");
+        return;
+    }
+
     setIsFetchingPhotos(true);
     try {
         const token = await getGoogleToken();
-        console.log("Token received:", token ? "YES" : "NO");
-
-        const photos = await fetchGooglePhotos(token);
-        if (photos) {
+        
+        // Show a hint to the user before the picker opens
+        alert(`Please select photos from the album: ${albumUrl}`);
+        
+        const photos = await fetchGooglePhotos(token, albumUrl);
+        
+        if (photos && photos.length > 0) {
             setGalleryPhotos(photos);
             setIsGalleryOpen(true);
         }
     } catch (error) {
-        console.error("DETAILED ERROR:", error); // Check this in F12 Console
-        alert("Error: " + error);
+        console.error("Gallery Error:", error);
     } finally {
         setIsFetchingPhotos(false);
     }
 };
 
-     const fetchGooglePhotos = async (token) => {
+     const fetchGooglePhotos = async (token, albumUrl) => {
     try {
+        // Step 1: Create a picking session
         const response = await fetch('https://photospicker.googleapis.com/v1/sessions', {
             method: 'POST',
             headers: { 
@@ -182,19 +190,32 @@ const handleAlbumClick = async (albumUrl) => {
         });
 
         const session = await response.json();
-        
-        if (!response.ok) {
-            console.error("Session Error:", session);
-            throw new Error(session.error?.message || "Failed to create picking session");
+        if (!response.ok) throw new Error(session.error?.message || "Session failed");
+
+        // Step 2: Open the Picker with 'autoclose' enabled
+        // This makes the window close automatically once the user clicks "Done"
+        const pickerWindow = window.open(`${session.pickerUri}/autoclose`, '_blank', 'width=800,height=700');
+
+        if (!pickerWindow) {
+            alert("Please allow pop-ups for this site to open the photo gallery.");
+            return null;
         }
 
-        // Open the Google Picker UI in a new window
-        const pickerWindow = window.open(session.pickerUri, '_blank', 'width=600,height=700');
-        
-        // This tells the user what to do next
-        alert("A new window opened. Select your photos there, click 'Done', then click 'Album' here again to show them.");
-        
-        return []; 
+        // Step 3: Auto-Refresh Polling
+        return new Promise((resolve) => {
+            const checkWindow = setInterval(async () => {
+                if (pickerWindow.closed) {
+                    clearInterval(checkWindow);
+                    
+                    // Fetch the specific items selected during this session
+                    const itemsResponse = await fetch(`https://photospicker.googleapis.com/v1/mediaItems?sessionId=${session.id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await itemsResponse.json();
+                    resolve(data.mediaItems || []);
+                }
+            }, 1000);
+        });
     } catch (err) {
         console.error("Picker Flow Error:", err);
         return null;
@@ -575,33 +596,49 @@ const getDeviceType = () => {
 )}
 
 {isGalleryOpen && (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xl" onClick={() => setIsGalleryOpen(false)}></div>
-        <div className="relative bg-white w-full max-w-5xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h2 className="text-xl font-black uppercase tracking-tighter text-slate-900">Trip Gallery</h2>
-                <button onClick={() => setIsGalleryOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                    <i data-lucide="x" className="w-6 h-6 text-slate-400"></i>
+    <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-6xl h-[85vh] rounded-[2rem] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in duration-300">
+            {/* Header */}
+            <div className="p-6 border-b flex justify-between items-center bg-white">
+                <div>
+                    <h2 className="text-2xl font-black text-slate-900">ALBUM GALLERY</h2>
+                    <p className="text-slate-500 text-xs uppercase tracking-widest">Selected Photos</p>
+                </div>
+                <button 
+                    onClick={() => setIsGalleryOpen(false)} 
+                    className="p-3 bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-full transition-all"
+                >
+                    <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
             </div>
             
-            <div className="p-6 overflow-y-auto scrollable-list flex-1 bg-slate-50">
+            {/* Grid Area */}
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {galleryPhotos.map((photo) => (
-                        <div key={photo.id} className="aspect-square rounded-2xl overflow-hidden bg-slate-200 shadow-sm group">
+                        <div 
+                            key={photo.id} 
+                            className="aspect-square rounded-2xl overflow-hidden bg-slate-200 shadow-sm group relative"
+                        >
                             <img 
-                                src={`${photo.baseUrl}=w400-h400-c`} 
-                                alt="" 
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 cursor-pointer"
-                                onClick={() => window.open(photo.productUrl, '_blank')}
+                                src={`${photo.baseUrl}=w500-h500-c`} 
+                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 cursor-pointer"
+                                onClick={() => window.open(photo.mediaItemUri, '_blank')}
+                                alt="Adventure Photo"
                             />
                         </div>
                     ))}
                 </div>
             </div>
-            
-            <div className="p-6 bg-white">
-                <button onClick={() => setIsGalleryOpen(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Close Gallery</button>
+
+            {/* Footer */}
+            <div className="p-6 bg-white border-t">
+                <button 
+                    onClick={() => setIsGalleryOpen(false)} 
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-slate-800 transition-colors"
+                >
+                    Close Gallery
+                </button>
             </div>
         </div>
     </div>
