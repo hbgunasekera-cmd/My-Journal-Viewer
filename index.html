@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>   
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
     <script>
@@ -74,18 +74,16 @@
         const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        const CLIENT_ID ='54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com';
-        
-        
+               
         const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
         
 
 
         const auditLocationName = (name) => {
-            if (!name) return "";
-            return name.replace(/[0-9]/g, "").replace(/[^\x00-\x7F]/g, "").replace(/[^a-zA-Z\s]/g, "").replace(/\s+/g, " ").trim().toLowerCase().split(" ").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-        };
+        if (!name) return "";
+        return name.replace(/[0-9]/g, "").replace(/[^\x00-\x7F]/g, "").replace(/[^a-zA-Z\s]/g, "").replace(/\s+/g, " ").trim().toLowerCase().split(" ").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+    };
 
         function App() {
             const [places, setPlaces] = useState([]);
@@ -99,7 +97,7 @@
             const [comments, setComments] = useState({}); 
             const [newCommentText, setNewCommentText] = useState('');
             const [isFilterOpen, setIsFilterOpen] = useState(false);          
-            const [isFetchingPhotos, setIsFetchingPhotos] = useState(false);
+            
             
 
             useEffect(() => { initApp(); }, []);
@@ -117,59 +115,42 @@
             }, [places, searchTerm, filterTag, sortBy, isArticleOpen, comments, isFilterOpen]);
 
             const fetchPlaces = async () => {
-                const { data } = await supabaseClient
-                    .from('travel_bucket_list')
-                    .select('*')
-                    .eq('status', 'done')
-                    .order('created_at', { ascending: false });
-                setPlaces(data || []);
-            };
+            const { data } = await supabaseClient
+                .from('travel_bucket_list')
+                .select('*')
+                .eq('status', 'done')
+                .order('created_at', { ascending: false });
+            setPlaces(data || []);
+        };
             
 
 const handleAlbumClick = (albumUrl) => {
-    if (!albumUrl) {
-        alert("No album link available for this location.");
-        return;
-    }
-
-    // Opens the Google Photos shared link in a new tab
-    window.open(albumUrl, '_blank');
-};
+            if (!albumUrl) {
+                alert("No album link available for this location.");
+                return;
+            }
+            window.open(albumUrl, '_blank');
+        };
 
 
 
 
             const fetchInteractions = async () => {
-                const { data: likeData, error: likeError } = await supabaseClient
-                    .from('location_likes')
-                    .select('location_id');
+            const { data: likeData } = await supabaseClient.from('location_likes').select('location_id');
+            const likeCounts = likeData?.reduce((acc, curr) => {
+                acc[curr.location_id] = (acc[curr.location_id] || 0) + 1;
+                return acc;
+            }, {});
+            setLikes(likeCounts || {});
 
-                if (likeError) {
-                    console.error("Supabase Error (location_likes):", likeError.message);
-                } else {
-                    const likeCounts = likeData?.reduce((acc, curr) => {
-                        acc[curr.location_id] = (acc[curr.location_id] || 0) + 1;
-                        return acc;
-                    }, {});
-                    setLikes(likeCounts || {});
-                }
-
-                const { data: commentData, error: commentError } = await supabaseClient
-                    .from('location_comments')
-                    .select('*')
-                    .order('created_at', { ascending: true });
-
-                if (commentError) {
-                    console.error("Supabase Error (location_comments):", commentError.message);
-                } else {
-                    const grouped = commentData?.reduce((acc, curr) => {
-                        if (!acc[curr.location_id]) acc[curr.location_id] = [];
-                        acc[curr.location_id].push(curr);
-                        return acc;
-                    }, {});
-                    setComments(grouped || {});
-                }
-            };
+            const { data: commentData } = await supabaseClient.from('location_comments').select('*').order('created_at', { ascending: true });
+            const grouped = commentData?.reduce((acc, curr) => {
+                if (!acc[curr.location_id]) acc[curr.location_id] = [];
+                acc[curr.location_id].push(curr);
+                return acc;
+            }, {});
+            setComments(grouped || {});
+        };
             
       const getInteractionMetadata = async () => {
     const providers = [
@@ -234,53 +215,46 @@ const handleAlbumClick = (albumUrl) => {
 };
 
    const logVisit = async () => {
-    if (window.location.protocol === 'file:') return;
+            // Check session storage to prevent logging refreshes
+            if (sessionStorage.getItem('visit_logged') || window.location.protocol === 'file:') return;
 
-    let geo = null;
-    const providers = [
-        'https://ipapi.co/json/',
-        'https://demo.ip-api.com/json/?fields=city,country,region',
-        'https://api.db-ip.com/v2/free/self'
-    ];
+            let geo = null;
+            const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
 
-    for (const url of providers) {
-        try {
-            const response = await fetch(url);
-            if (response.ok) {
-                const data = await response.json();
-                geo = {
-                    ip: data.ip || data.query || data.ipAddress || '',
-                    // Includes countryName (DB-IP) and country_name (ipapi)
-                    country: data.country_name || data.countryName || data.country || 'Unknown',
-                    // Includes stateProv (DB-IP) and region_name (ipapi)
-                    region: data.region_name || data.stateProv || data.region || 'Unknown',
-                    city: data.city || 'Unknown'
-                };
-                break; 
+            for (const url of providers) {
+                try {
+                    const response = await fetch(url);
+                    if (response.ok) {
+                        const data = await response.json();
+                        geo = {
+                            ip: data.ip || data.query || data.ipAddress || '',
+                            country: data.country_name || data.countryName || data.country || 'Unknown',
+                            region: data.region_name || data.stateProv || data.region || 'Unknown',
+                            city: data.city || 'Unknown'
+                        };
+                        break; 
+                    }
+                } catch (e) { console.warn(`Log provider failed...`); }
             }
-        } catch (e) {
-            console.warn(`Provider ${url} failed, trying next...`);
-        }
-    }
 
-    if (!geo || !geo.ip) return;
+            if (!geo || !geo.ip) return;
 
-    const ua = navigator.userAgent;
-    const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || 
-                    ua.includes("rv:148.0") || 
-                    (ua.includes("iPhone") && ua.includes("CriOS"));
+            const ua = navigator.userAgent;
+            // Exclusion logic for your own devices
+            const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || ua.includes("rv:148.0") || (ua.includes("iPhone") && ua.includes("CriOS"));
+            if (isOwner) return;
 
-    if (isOwner) return;
+            const { error } = await supabaseClient.from('page_visits').insert([{
+                page_path: 'adventure_journal_index',
+                user_agent: ua,
+                country: geo.country,
+                region: geo.region,
+                city: geo.city,
+                ip_address: geo.ip
+            }]);
 
-    await supabaseClient.from('page_visits').insert([{
-        page_path: 'adventure_journal_index',
-        user_agent: ua,
-        country: geo.country,
-        region: geo.region,
-        city: geo.city,
-        ip_address: geo.ip
-    }]);
-};
+            if (!error) sessionStorage.setItem('visit_logged', 'true');
+        };
 
 const getDeviceType = () => {
     const ua = navigator.userAgent;
@@ -290,29 +264,29 @@ const getDeviceType = () => {
 };
 
             const getUserLocation = () => {
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                        (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                        () => setUserCoords(DEFAULT_LOCATION)
-                    );
-                } else { setUserCoords(DEFAULT_LOCATION); }
-            };
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                    () => setUserCoords(DEFAULT_LOCATION)
+                );
+            } else { setUserCoords(DEFAULT_LOCATION); }
+        };
 
             const calculateDistance = (lat2, lon2) => {
-                const ref = userCoords || DEFAULT_LOCATION;
-                const R = 6371; 
-                const dLat = (lat2 - ref.lat) * Math.PI / 180;
-                const dLon = (lon2 - ref.lng) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(ref.lat * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-                return (R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)))).toFixed(1);
-            };
+            const ref = userCoords || DEFAULT_LOCATION;
+            const R = 6371; 
+            const dLat = (lat2 - ref.lat) * Math.PI / 180;
+            const dLon = (lon2 - ref.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(ref.lat * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return (R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)))).toFixed(1);
+        };
 
             const filteredAndSortedPlaces = useMemo(() => {
-                let filtered = [...places];
-                if (searchTerm.trim() !== "") filtered = filtered.filter(p => p.place_name.toLowerCase().includes(searchTerm.toLowerCase()));
-                if (filterTag !== 'All') filtered = filtered.filter(p => p.category === filterTag);
-                return filtered.sort((a, b) => sortBy === 'distance' ? parseFloat(calculateDistance(a.latitude, a.longitude)) - parseFloat(calculateDistance(b.latitude, b.longitude)) : new Date(b.created_at) - new Date(a.created_at));
-            }, [places, searchTerm, filterTag, sortBy, userCoords]);
+            let filtered = [...places];
+            if (searchTerm.trim() !== "") filtered = filtered.filter(p => p.place_name.toLowerCase().includes(searchTerm.toLowerCase()));
+            if (filterTag !== 'All') filtered = filtered.filter(p => p.category === filterTag);
+            return filtered.sort((a, b) => sortBy === 'distance' ? parseFloat(calculateDistance(a.latitude, a.longitude)) - parseFloat(calculateDistance(b.latitude, b.longitude)) : new Date(b.created_at) - new Date(a.created_at));
+        }, [places, searchTerm, filterTag, sortBy, userCoords]);
 
             return (
                 <div className="h-full flex flex-col max-w-7xl mx-auto">
@@ -421,7 +395,7 @@ const getDeviceType = () => {
                     <h2 className="text-2xl font-black uppercase tracking-tighter">{auditLocationName(viewingArticle.place_name)}</h2>
                  
                     <button 
-                        onClick={() => { window.open(viewingArticle.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${viewingArticle.latitude},${viewingArticle.longitude}`, '_blank'); }}
+                        onClick={() => { window.open(viewingArticle.google_maps_url || `https://www.google.com/maps?q=${viewingArticle.latitude},${viewingArticle.longitude}`, '_blank'); }}
                         className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
                     >
                         <i data-lucide="map-pin" className="w-4 h-4 text-slate-600"></i>
