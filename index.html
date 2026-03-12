@@ -126,18 +126,18 @@ const getGoogleToken = () => {
     return new Promise((resolve, reject) => {
         try {
             const client = google.accounts.oauth2.initTokenClient({
-    client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
-    scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
-    callback: (response) => {
-        if (response.access_token) {
-        
-            setAccessToken(response.access_token);
-            
-        }
-    },
-});
+                client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
+                callback: (response) => {
+                    if (response.access_token) {
+                        setAccessToken(response.access_token);
+                        resolve(response.access_token); // CRITICAL: This unblocks the await
+                    } else {
+                        reject("Failed to get access token");
+                    }
+                },
+            });
             client.requestAccessToken({ prompt: 'select_account' });
-            
         } catch (err) {
             reject(err);
         }
@@ -145,39 +145,32 @@ const getGoogleToken = () => {
 };
 
 const handleAlbumClick = async (albumUrl) => {
-    if (!albumUrl) {
-        console.error("No Album URL provided");
-        return;
-    }
 
-    // IMPORTANT: The API requires an internal Album ID. 
-    // If your DB stores 'https://photos.app.goo.gl/XYZ', split('/').pop() 
-    // gives 'XYZ', which is NOT always the correct internal ID.
-    const albumId = albumUrl.split('/').pop(); 
+    if (!albumUrl) return;
     
-    setIsFetchingPhotos(true);
+    setIsFetchingPhotos(true); // Spinner starts
     try {
         let token = accessToken;
         if (!token) {
-            token = await getGoogleToken();
+            token = await getGoogleToken(); // Now unblocks correctly
         }
 
-        // Only proceed if we successfully obtained a token
         if (token) {
-            const photos = await fetchGooglePhotos(albumId, token);
+            // Clean the album ID: remove any trailing slashes or query params
+            const cleanAlbumId = albumUrl.split('?')[0].split('/').filter(Boolean).pop();
+            const photos = await fetchGooglePhotos(cleanAlbumId, token);
             
             if (photos && photos.length > 0) {
                 setGalleryPhotos(photos);
                 setIsGalleryOpen(true);
             } else {
-                console.warn("No photos found in this album or ID is invalid.");
-                alert("Could not load photos. Please ensure the Album ID is correct.");
+                alert("No photos found. Check console for API errors.");
             }
         }
     } catch (error) {
-        console.error("Gallery Error:", error);
+        console.error("Auth/Gallery Error:", error);
     } finally {
-        setIsFetchingPhotos(false);
+        setIsFetchingPhotos(false); // Spinner stops regardless of success or failure
     }
 };
 
