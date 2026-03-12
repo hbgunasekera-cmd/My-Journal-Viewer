@@ -128,8 +128,10 @@ const getGoogleToken = () => {
             client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
             scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
             callback: (response) => {
-                setAccessToken(response.access_token);
-                resolve(response.access_token);
+                if (response.access_token) {
+                    setAccessToken(response.access_token);
+                    resolve(response.access_token);
+                }
             },
         });
         client.requestAccessToken();
