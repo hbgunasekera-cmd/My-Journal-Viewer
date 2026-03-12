@@ -186,27 +186,41 @@
     }
 };
 
-      const logVisit = async () => {
+   const logVisit = async () => {
+    // 1. Block local file access immediately (Prevents the /mnt/... path logs)
+    if (window.location.protocol === 'file:') {
+        console.log("Local file access detected. Skipping log.");
+        return;
+    }
+
     try {
         const response = await fetch('https://ipapi.co/json/');
         const geo = await response.json();
+        const currentIP = geo.ip || '';
+        const ua = navigator.userAgent;
 
-        // Check if the current user matches your specific session details
-        const isOwner = geo.ip === "2402:4000:b280:b2d:7056:9e2d:f09c:91cb" && 
-                        navigator.userAgent.includes("rv:148.0");
+        /**
+         * 2. Identify Owner Sessions:
+         * - Matches the IP prefix for your network (2402:4000:b280:b2d)
+         * - Matches your Ubuntu Firefox session (rv:148.0)
+         * - Matches your iPhone Chrome session (CriOS)
+         */
+        const isOwner = currentIP.startsWith("2402:4000:b280:b2d") || 
+                        ua.includes("rv:148.0") || 
+                        (ua.includes("iPhone") && ua.includes("CriOS"));
 
         if (isOwner) {
-            console.log("Owner visit detected. Skipping log.");
+            console.log("Owner session detected. Skipping log.");
             return;
         }
 
         await supabaseClient.from('page_visits').insert([{
             page_path: 'adventure_journal_index',
-            user_agent: navigator.userAgent,
+            user_agent: ua,
             country: geo.country_name || 'Unknown',
             region: geo.region || 'Unknown',
             city: geo.city || 'Unknown',
-            ip_address: geo.ip || 'Unknown'
+            ip_address: currentIP
         }]);
     } catch (e) {
         console.warn("Geo-log failed:", e);
