@@ -125,40 +125,36 @@
             
 const getGoogleToken = () => {
     return new Promise((resolve, reject) => {
-        try {
-            const client = google.accounts.oauth2.initTokenClient({
-                client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
-                scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
-                callback: (response) => {
-                    if (response.error) {
-                        reject(response.error);
-                        return;
-                    }
+        const client = google.accounts.oauth2.initTokenClient({
+            client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
+            scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
+            callback: (response) => {
+                if (response.error) {
+                    reject(response.error);
+                    return;
+                }
+                
+                // VERIFICATION: Did the user actually check the box?
+                const hasScope = google.accounts.oauth2.hasGrantedAllScopes(
+                    response,
+                    'https://www.googleapis.com/auth/photoslibrary.readonly'
+                );
 
-                    // CRITICAL: This checks if you actually checked the box
-                    const hasScope = google.accounts.oauth2.hasGrantedAllScopes(
-                        response,
-                        'https://www.googleapis.com/auth/photoslibrary.readonly'
-                    );
+                if (!hasScope) {
+                    alert("ERROR: You MUST check the box to allow access to Google Photos.");
+                    setIsFetchingPhotos(false);
+                    return;
+                }
 
-                    if (!hasScope) {
-                        alert("ERROR: You didn't check the Google Photos box! Please try again and check the permission box.");
-                        setAccessToken(null); // Clear the bad token
-                        reject("Scope not granted");
-                        return;
-                    }
-
-                    setAccessToken(response.access_token);
-                    resolve(response.access_token);
-                },
-            });
-            
-            // Forces Google to show the checkbox screen every time until you get it right
-            client.requestAccessToken({ prompt: 'consent' }); 
-        } catch (err) {
-            reject(err);
-        }
+                setAccessToken(response.access_token);
+                resolve(response.access_token);
+            },
+        });
+        
+        // Changing prompt to 'consent' FORCES the checkbox screen to show up
+        client.requestAccessToken({ prompt: 'consent' }); 
     });
+};
 };
 const handleAlbumClick = async (albumUrl) => {
     if (!albumUrl) return;
