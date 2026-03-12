@@ -130,33 +130,29 @@ const getGoogleToken = () => {
                 scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
                 callback: (response) => {
                     if (response.error) {
-                        console.error("Auth Error:", response.error);
                         reject(response.error);
                         return;
                     }
 
-                    // CHECK: Did the user actually check the Google Photos box?
-                    const hasAccess = google.accounts.oauth2.hasGrantedAllScopes(
+                    // Verify that the Photos permission was actually granted
+                    const hasScope = google.accounts.oauth2.hasGrantedAllScopes(
                         response,
                         'https://www.googleapis.com/auth/photoslibrary.readonly'
                     );
 
-                    if (!hasAccess) {
-                        alert("Permission Denied: You MUST check the box to 'See and download your Google Photos library' during the login popup.");
+                    if (!hasScope) {
+                        alert("You must check the box for Google Photos access to see the gallery.");
                         setIsFetchingPhotos(false);
-                        reject("Missing required scopes");
+                        reject("Scope not granted");
                         return;
                     }
 
-                    if (response.access_token) {
-                        setAccessToken(response.access_token);
-                        resolve(response.access_token);
-                    }
+                    setAccessToken(response.access_token);
+                    resolve(response.access_token);
                 },
             });
             
-            // FIX: Changed from 'select_account' to 'consent' 
-            // This forces the checkbox screen to appear every time until you get it right.
+            // This forces the consent screen to show the checkboxes
             client.requestAccessToken({ prompt: 'consent' }); 
         } catch (err) {
             reject(err);
