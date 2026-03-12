@@ -148,6 +148,31 @@
                     setComments(grouped || {});
                 }
             };
+            
+      const getInteractionMetadata = async () => {
+    const providers = [
+        'https://ipapi.co/json/',
+        'https://demo.ip-api.com/json/?fields=city,country',
+        'https://api.db-ip.com/v2/free/self'
+    ];
+
+    for (const url of providers) {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    city: data.city || 'Unknown',
+                    // Added data.countryName to catch the DB-IP provider response
+                    country: data.country_name || data.countryName || data.country || 'Unknown' 
+                };
+            }
+        } catch (e) {
+            console.warn(`Geo provider ${url} failed, trying next...`);
+        }
+    }
+    return { city: 'Unknown', country: 'Unknown' };
+};
 
             const handleLike = async (locationId) => {
     const meta = await getInteractionMetadata();
@@ -192,7 +217,7 @@
     let geo = null;
     const providers = [
         'https://ipapi.co/json/',
-        'https://ip-api.com/json/',
+        'https://demo.ip-api.com/json/?fields=city,country,region',
         'https://api.db-ip.com/v2/free/self'
     ];
 
@@ -201,11 +226,12 @@
             const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
-                // Standardize fields across different API formats
                 geo = {
-                    ip: data.ip || data.query || '',
-                    country: data.country_name || data.country || 'Unknown',
-                    region: data.region_name || data.region || 'Unknown',
+                    ip: data.ip || data.query || data.ipAddress || '',
+                    // Includes countryName (DB-IP) and country_name (ipapi)
+                    country: data.country_name || data.countryName || data.country || 'Unknown',
+                    // Includes stateProv (DB-IP) and region_name (ipapi)
+                    region: data.region_name || data.stateProv || data.region || 'Unknown',
                     city: data.city || 'Unknown'
                 };
                 break; 
@@ -215,28 +241,15 @@
         }
     }
 
-    // If all providers fail, we stop here to avoid "null" errors
-    if (!geo || !geo.ip) {
-        console.error("All geo-providers failed to retrieve IP.");
-        return;
-    }
+    if (!geo || !geo.ip) return;
 
     const ua = navigator.userAgent;
-
-    /**
-     * Identify Owner Sessions:
-     * We use geo.ip (the corrected variable name)
-     */
     const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || 
                     ua.includes("rv:148.0") || 
                     (ua.includes("iPhone") && ua.includes("CriOS"));
 
-    if (isOwner) {
-        console.log("Owner session detected. Skipping log.");
-        return;
-    }
+    if (isOwner) return;
 
-    // Insert into Supabase
     await supabaseClient.from('page_visits').insert([{
         page_path: 'adventure_journal_index',
         user_agent: ua,
@@ -365,66 +378,79 @@ const getDeviceType = () => {
                     </div>
 
                     {isArticleOpen && viewingArticle && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsArticleOpen(false)}></div>
-                            <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                                <img src={viewingArticle.cover_photo_url} className="h-48 w-full object-cover" />
-                                <div className="p-8 overflow-y-auto scrollable-list">
-                                    <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">{auditLocationName(viewingArticle.place_name)}</h2>
-                                    <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase mb-6">{viewingArticle.category}</span>
-                                    
-                                    <p className="text-slate-600 leading-relaxed mb-10">{viewingArticle.ai_article}</p>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsArticleOpen(false)}></div>
+        <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <img src={viewingArticle.cover_photo_url} className="h-48 w-full object-cover" />
+            <div className="p-8 overflow-y-auto scrollable-list">
+                <div className="flex justify-between items-start mb-2">
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">{auditLocationName(viewingArticle.place_name)}</h2>
+                 
+                    <button 
+                        onClick={() => { window.open(viewingArticle.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${viewingArticle.latitude},${viewingArticle.longitude}`, '_blank'); }}
+                        className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
+                    >
+                        <i data-lucide="map-pin" className="w-4 h-4 text-slate-600"></i>
+                    </button>
+                </div>
 
-                                    <div className="border-t border-slate-100 pt-8">
-                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Discussion ({comments[viewingArticle.id]?.length || 0})</h4>
-                                        <div className="space-y-4 mb-6">
-                                            {comments[viewingArticle.id]?.map((c, i) => (
-                                                <div key={i} className="bg-slate-50 p-4 rounded-2xl">
-                                                    <p className="text-xs text-slate-700 font-semibold">{c.comment_text}</p>
-                                                    <span className="text-[8px] font-bold text-slate-400 uppercase mt-2 block">{new Date(c.created_at).toLocaleDateString()}</span>
-                                                </div>
-                                            ))}
-                                            {(!comments[viewingArticle.id] || comments[viewingArticle.id].length === 0) && (
-                                                <p className="text-[9px] font-bold text-slate-300 uppercase italic">No comments yet. Be the first!</p>
-                                            )}
-                                        </div>
-                                        <div className="relative group">
-                                            <input 
-                                                type="text" 
-                                                value={newCommentText}
-                                                onChange={(e) => setNewCommentText(e.target.value)}
-                                                placeholder="Share your thoughts..." 
-                                                className="w-full bg-slate-100 border-2 border-transparent focus:border-slate-900 focus:bg-white rounded-2xl px-5 py-4 text-xs font-bold transition-all outline-none pr-12"
-                                                onKeyDown={async (e) => {
-                                                    if (e.key === 'Enter' && newCommentText.trim()) {
-                                                        const textToSubmit = newCommentText;
-                                                        setNewCommentText(''); // Clear UI immediately
-                                                        await submitComment(viewingArticle.id, textToSubmit);
-                                                    }
-                                                }}
-                                            />
-                                            <button 
-                                                onClick={async () => {
-                                                    if (newCommentText.trim()) {
-                                                        const textToSubmit = newCommentText;
-                                                        setNewCommentText(''); // Clear UI immediately
-                                                        await submitComment(viewingArticle.id, textToSubmit);
-                                                    }
-                                                }}
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 focus:outline-none"
-                                            >
-                                                <i data-lucide="send" className="w-4 h-4 text-slate-400 hover:text-slate-900 transition-colors"></i>
-                                            </button>
-                                        </div>
-                                    </div>
+                <div className="flex items-center justify-between mb-6">
+                    <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                        {viewingArticle.category}
+                    </span>
+                    {/* Heart Reaction Button */}
+                    <button 
+                        onClick={() => handleLike(viewingArticle.id)} 
+                        className="flex items-center gap-2 group transition-all bg-slate-50 hover:bg-rose-50 px-4 py-2 rounded-2xl border border-slate-100"
+                    >
+                        <i data-lucide="heart" className={`w-4 h-4 ${likes[viewingArticle.id] ? 'text-rose-500 fill-rose-500' : 'text-slate-300'}`}></i>
+                        <span className="text-xs font-black text-slate-900">{likes[viewingArticle.id] || 0}</span>
+                    </button>
+                </div>
 
-                                    <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] shadow-lg hover:bg-slate-800 transition-colors">
-                                        Back to Log
-                                    </button>
+                <p className="text-slate-600 leading-relaxed mb-10">{viewingArticle.ai_article}</p>
+
+                <div className="border-t border-slate-100 pt-8">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Discussion ({comments[viewingArticle.id]?.length || 0})</h4>
+                    <div className="space-y-4 mb-6">
+                        {comments[viewingArticle.id]?.map((c, i) => (
+                            <div key={i} className="bg-slate-50 p-4 rounded-2xl">
+                                <p className="text-xs text-slate-700 font-semibold">{c.comment_text}</p>
+                                <div className="flex justify-between mt-2">
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase">{new Date(c.created_at).toLocaleDateString()}</span>
+                                    {c.city && <span className="text-[7px] font-black text-slate-300 uppercase">{c.city}</span>}
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        ))}
+                    </div>
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            value={newCommentText}
+                            onChange={(e) => setNewCommentText(e.target.value)}
+                            placeholder="Share your thoughts..." 
+                            className="w-full bg-slate-100 border-2 border-transparent focus:border-slate-900 focus:bg-white rounded-2xl px-5 py-4 text-xs font-bold transition-all outline-none pr-12"
+                            onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && newCommentText.trim()) {
+                                    const text = newCommentText;
+                                    setNewCommentText('');
+                                    await submitComment(viewingArticle.id, text);
+                                }
+                            }}
+                        />
+                        <button 
+                            onClick={() => { if(newCommentText.trim()) submitComment(viewingArticle.id, newCommentText); setNewCommentText(''); }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2"
+                        >
+                            <i data-lucide="send" className="w-4 h-4 text-slate-400"></i>
+                        </button>
+                    </div>
+                </div>
+                <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Back to Log</button>
+            </div>
+        </div>
+    </div>
+)}
                 </div>
             );
         }
