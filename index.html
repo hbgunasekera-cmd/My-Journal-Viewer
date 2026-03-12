@@ -191,16 +191,6 @@
 
     let geo = null;
     const providers = [
-        'https://ipapi.co/json/',                // Current provider
-        'http://ip-api.com/json/',               // Fallback 1 (No key needed)
-        'https://api.db-ip.com/v2/free/self'     // Fallback 2 (Very generous)
-    ];
-
-   const logVisit = async () => {
-    if (window.location.protocol === 'file:') return;
-
-    let geo = null;
-    const providers = [
         'https://ipapi.co/json/',
         'https://ip-api.com/json/',
         'https://api.db-ip.com/v2/free/self'
