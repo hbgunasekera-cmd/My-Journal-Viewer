@@ -129,15 +129,33 @@ const getGoogleToken = () => {
                 client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
                 scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
                 callback: (response) => {
+                    if (response.error) {
+                        console.error("Auth Error:", response.error);
+                        reject(response.error);
+                        return;
+                    }
+
+                    // CRITICAL FIX: Verify the user actually checked the permission box
+                    const hasAccess = google.accounts.oauth2.hasGrantedAllScopes(
+                        response,
+                        'https://www.googleapis.com/auth/photoslibrary.readonly'
+                    );
+
+                    if (!hasAccess) {
+                        alert("Permission Denied: You must check the box to allow access to Google Photos during the login popup.");
+                        reject("Missing required scopes");
+                        return;
+                    }
+
                     if (response.access_token) {
                         setAccessToken(response.access_token);
-                        resolve(response.access_token); // CRITICAL: This unblocks the await
-                    } else {
-                        reject("Failed to get access token");
+                        resolve(response.access_token);
                     }
                 },
             });
-            client.requestAccessToken({ prompt: 'select_account' });
+            
+            // CRITICAL FIX: Change prompt to 'consent' to force the checkbox screen to appear again
+            client.requestAccessToken({ prompt: 'consent' }); 
         } catch (err) {
             reject(err);
         }
