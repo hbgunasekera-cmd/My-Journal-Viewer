@@ -135,14 +135,15 @@ const getGoogleToken = () => {
                         return;
                     }
 
-                    // CRITICAL FIX: Verify the user actually checked the permission box
+                    // CHECK: Did the user actually check the Google Photos box?
                     const hasAccess = google.accounts.oauth2.hasGrantedAllScopes(
                         response,
                         'https://www.googleapis.com/auth/photoslibrary.readonly'
                     );
 
                     if (!hasAccess) {
-                        alert("Permission Denied: You must check the box to allow access to Google Photos during the login popup.");
+                        alert("Permission Denied: You MUST check the box to 'See and download your Google Photos library' during the login popup.");
+                        setIsFetchingPhotos(false);
                         reject("Missing required scopes");
                         return;
                     }
@@ -154,7 +155,8 @@ const getGoogleToken = () => {
                 },
             });
             
-            // CRITICAL FIX: Change prompt to 'consent' to force the checkbox screen to appear again
+            // FIX: Changed from 'select_account' to 'consent' 
+            // This forces the checkbox screen to appear every time until you get it right.
             client.requestAccessToken({ prompt: 'consent' }); 
         } catch (err) {
             reject(err);
