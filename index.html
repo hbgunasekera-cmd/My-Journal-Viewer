@@ -9,7 +9,8 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>    
+    <script src="https://unpkg.com/lucide@latest"></script>   
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
     <script>
@@ -93,6 +94,10 @@
             const [comments, setComments] = useState({}); 
             const [newCommentText, setNewCommentText] = useState('');
             const [isFilterOpen, setIsFilterOpen] = useState(false);
+            const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+            const [galleryPhotos, setGalleryPhotos] = useState([]);
+            const [isFetchingPhotos, setIsFetchingPhotos] = useState(false);
+            const [accessToken, setAccessToken] = useState(null);
 
             useEffect(() => { initApp(); }, []);
 
@@ -116,6 +121,63 @@
                     .order('created_at', { ascending: false });
                 setPlaces(data || []);
             };
+            
+const getGoogleToken = () => {
+    return new Promise((resolve) => {
+        const client = google.accounts.oauth2.initTokenClient({
+            client_id: '54611610223-6kbb79eut4gn3pogcocjj2g2fj5ohqpj.apps.googleusercontent.com',
+            scope: 'https://www.googleapis.com/auth/photoslibrary.readonly',
+            callback: (response) => {
+                setAccessToken(response.access_token);
+                resolve(response.access_token);
+            },
+        });
+        client.requestAccessToken();
+    });
+};
+
+const handleAlbumClick = async (albumUrl) => {
+    // Extract Album ID from the URL (Assuming the URL is the full link)
+    // Note: The API requires the specific Album ID, not the shareable URL.
+    // If you store the ID directly in the DB, use that.
+    const albumId = albumUrl.split('/').pop(); 
+    
+    setIsFetchingPhotos(true);
+    let token = accessToken;
+    if (!token) {
+        token = await getGoogleToken();
+    }
+
+    const photos = await fetchGooglePhotos(albumId, token);
+    if (photos) {
+        setGalleryPhotos(photos);
+        setIsGalleryOpen(true);
+    }
+    setIsFetchingPhotos(false);
+};
+
+            const fetchGooglePhotos = async (albumId, accessToken) => {
+    try {
+        const response = await fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                albumId: albumId,
+                pageSize: 100 // Adjust based on your needs
+            })
+        });
+
+        const data = await response.json();
+        return data.mediaItems; // This contains the baseUrl for each photo
+    } catch (error) {
+        console.error("Error fetching photos:", error);
+    }
+};
+
+
 
             const fetchInteractions = async () => {
                 const { data: likeData, error: likeError } = await supabaseClient
@@ -368,7 +430,17 @@ const getDeviceType = () => {
                                                 )} 
                                                 className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100"
                                             >Maps</button>
-                                            <button onClick={() => window.open(place.photo_album_url, '_blank')} disabled={!place.photo_album_url} className={`py-2.5 rounded-xl text-[8px] font-black uppercase ${place.photo_album_url ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}>Album</button>
+                                            
+                                            <button 
+    onClick={() => handleAlbumClick(place.photo_album_url)} 
+    disabled={!place.photo_album_url || isFetchingPhotos} 
+    className={`py-2.5 rounded-xl text-[8px] font-black uppercase flex items-center justify-center gap-1 ${
+        place.photo_album_url ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'
+    }`}
+>
+    {isFetchingPhotos ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Album'}
+</button>
+                                            
                                             {place.ai_article && <button onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase">Read</button>}
                                         </div>
                                     </div>
@@ -473,6 +545,39 @@ const getDeviceType = () => {
                     </div>
                 </div>
                 <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Back to Log</button>
+            </div>
+        </div>
+    </div>
+)}
+
+{isGalleryOpen && (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xl" onClick={() => setIsGalleryOpen(false)}></div>
+        <div className="relative bg-white w-full max-w-5xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h2 className="text-xl font-black uppercase tracking-tighter text-slate-900">Trip Gallery</h2>
+                <button onClick={() => setIsGalleryOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                    <i data-lucide="x" className="w-6 h-6 text-slate-400"></i>
+                </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto scrollable-list flex-1 bg-slate-50">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {galleryPhotos.map((photo) => (
+                        <div key={photo.id} className="aspect-square rounded-2xl overflow-hidden bg-slate-200 shadow-sm group">
+                            <img 
+                                src={`${photo.baseUrl}=w400-h400-c`} 
+                                alt="" 
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 cursor-pointer"
+                                onClick={() => window.open(photo.productUrl, '_blank')}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+            
+            <div className="p-6 bg-white">
+                <button onClick={() => setIsGalleryOpen(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Close Gallery</button>
             </div>
         </div>
     </div>
