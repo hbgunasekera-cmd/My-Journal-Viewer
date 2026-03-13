@@ -330,58 +330,91 @@ const getDeviceType = () => {
                     <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
                             {filteredAndSortedPlaces.map(place => (
-                                <div key={place.id} className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl">
-                                    <div className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
-                                        {place.cover_photo_url && <img src={place.cover_photo_url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                                        <div className="absolute bottom-3 left-4 pr-4">
-                                            <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">{auditLocationName(place.place_name)}</h3>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="p-4 flex flex-col flex-1">
-                                        <div className="flex justify-between items-center mb-3 text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                            <span>{calculateDistance(place.latitude, place.longitude)} KM</span>
-                                            <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100">{place.category}</span>
-                                        </div>
+    <div key={place.id} className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl">
+        {/* Image Section */}
+        <div className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
+            {place.cover_photo_url && (
+                <img 
+                    src={place.cover_photo_url} 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+            <div className="absolute bottom-3 left-4 pr-4">
+                <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
+                    {auditLocationName(place.place_name)}
+                </h3>
+            </div>
+        </div>
+        
+        {/* Content Section */}
+        <div className="p-4 flex flex-col flex-1">
+            {/* NEW: Locality & Category Row */}
+            <div className="flex justify-between items-start mb-1">
+                <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
+                        {place.locality || 'Explore'}
+                    </span>
+                </div>
+                <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100 text-[8px] font-black uppercase shrink-0">
+                    {place.category}
+                </span>
+            </div>
 
-                                        <div className="flex items-center gap-4 mb-4 px-1">
-                                            <button onClick={() => handleLike(place.id)} className="flex items-center gap-1.5 group transition-colors">
-                                                <i data-lucide="heart" className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 group-hover:fill-rose-500"></i>
-                                                <span className="text-[9px] font-black text-slate-400">{likes[place.id] || 0}</span>
-                                            </button>
-                                            <div className="flex items-center gap-1.5">
-                                                <i data-lucide="message-square" className="w-3.5 h-3.5 text-slate-300"></i>
-                                                <span className="text-[9px] font-black text-slate-400">{comments[place.id]?.length || 0}</span>
-                                            </div>
-                                        </div>
+            {/* Distance Row */}
+            <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                {calculateDistance(place.latitude, place.longitude)} KM AWAY
+            </div>
 
-                                        <div className="grid grid-cols-3 gap-2 mt-auto">
-                                            <button 
-                                                onClick={() => window.open(
-                                                    place.google_maps_url || `https://www.google.com/maps?q=${place.latitude},${place.longitude}`, 
-                                                    '_blank'
-                                                )} 
-                                                className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100"
-                                            >Maps</button>
-                                            
-                                            <button 
-    onClick={() => handleAlbumClick(place.photo_album_url)} 
-    disabled={!place.photo_album_url} 
-    className={`py-2.5 rounded-xl text-[8px] font-black uppercase flex items-center justify-center gap-1 ${
-        place.photo_album_url 
-            ? 'bg-blue-600 text-white hover:bg-blue-700 transition-colors' 
-            : 'bg-slate-50 text-slate-200 cursor-not-allowed'
-    }`}
->
-    Album
-</button>
-                                            
-                                            {place.ai_article && <button onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase">Read</button>}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
+            {/* Interactions (Likes/Comments) */}
+            <div className="flex items-center gap-4 mb-4 px-1">
+                <button onClick={() => handleLike(place.id)} className="flex items-center gap-1.5 group transition-colors">
+                    <i data-lucide="heart" className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 group-hover:fill-rose-500"></i>
+                    <span className="text-[9px] font-black text-slate-400">{likes[place.id] || 0}</span>
+                </button>
+                <div className="flex items-center gap-1.5">
+                    <i data-lucide="message-square" className="w-3.5 h-3.5 text-slate-300"></i>
+                    <span className="text-[9px] font-black text-slate-400">{comments[place.id]?.length || 0}</span>
+                </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-3 gap-2 mt-auto">
+                <button 
+                    onClick={() => window.open(
+                        place.google_maps_url || `https://www.google.com/maps?q=${place.latitude},${place.longitude}`, 
+                        '_blank'
+                    )} 
+                    className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100"
+                >
+                    Maps
+                </button>
+                
+                <button 
+                    onClick={() => handleAlbumClick(place.photo_album_url)} 
+                    disabled={!place.photo_album_url} 
+                    className={`py-2.5 rounded-xl text-[8px] font-black uppercase flex items-center justify-center gap-1 ${
+                        place.photo_album_url 
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 transition-colors' 
+                            : 'bg-slate-50 text-slate-200 cursor-not-allowed'
+                    }`}
+                >
+                    Album
+                </button>
+                
+                {place.ai_article && (
+                    <button 
+                        onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} 
+                        className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase"
+                    >
+                        Read
+                    </button>
+                )}
+            </div>
+        </div>
+    </div>
+))}
+                            
                         </div>
                     </div>
 
