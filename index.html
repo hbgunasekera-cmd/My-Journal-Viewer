@@ -134,10 +134,19 @@
         
 
 
-        const auditLocationName = (name) => {
-        if (!name) return "";
-        return name.replace(/[0-9]/g, "").replace(/[^\x00-\x7F]/g, "").replace(/[^a-zA-Z\s]/g, "").replace(/\s+/g, " ").trim().toLowerCase().split(" ").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-    };
+      const auditLocationName = (name) => {
+    if (!name) return "";
+    // Regex breakdown:
+    // [^ ... ] -> Match anything NOT in this list
+    // a-zA-Z0-9 -> Keep alphanumeric
+    // \s -> Keep spaces
+    // \- -> Keep hyphens
+    // ' -> Keep apostrophes
+    // \. -> Keep dots (Added)
+    return name
+        .replace(/[^a-zA-Z0-9\s\-'\.]/g, '') 
+        .trim();
+};
 
         function App() {
             const [places, setPlaces] = useState([]);
@@ -402,7 +411,11 @@ useEffect(() => {
                     fillOpacity: 1
                 })
                 .addTo(mapRef.current)
-                .bindTooltip(`<div class="font-bold text-[10px] uppercase p-1">${auditLocationName(place.place_name)}</div>`, { direction: 'top', opacity: 0.9 });
+                .bindTooltip(`
+    <div class="font-bold text-[10px] uppercase p-1">
+        ${auditLocationName(place.place_name)}
+    </div>
+`, { direction: 'top', opacity: 0.9 });
 
                 marker.on('mouseover', () => setHoveredPlaceId(place.id));
                 marker.on('mouseout', () => setHoveredPlaceId(null));
@@ -824,9 +837,9 @@ useEffect(() => {
                                 }`}
                             >
                                 <div className="flex flex-col">
-                                    <span className={`text-xs font-extrabold uppercase transition-colors ${isHovered ? 'text-blue-600' : 'text-slate-900'}`}>
-                                        {auditLocationName(place.place_name)}
-                                    </span>
+                                    <span className={`text-xs font-extrabold uppercase ${isHovered ? 'text-blue-600' : 'text-slate-900'}`}>
+    {auditLocationName(place.place_name)}
+</span>
                                     <span className="text-[9px] font-bold text-slate-400 uppercase">
                                         {place.category} • {calculateDistance(place.latitude, place.longitude)} KM
                                     </span>
