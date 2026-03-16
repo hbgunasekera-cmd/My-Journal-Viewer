@@ -21,6 +21,15 @@
 
       gtag('config', 'G-VRVQHWP2BJ');
     </script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+   
 
     
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>    
@@ -63,14 +72,32 @@
         .scrollable-list::-webkit-scrollbar { width: 6px; }
         .scrollable-list::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
         .text-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    </style>
+    
+    .leaflet-routing-container { display: none !important; }
+    /* Custom Map Tooltip Styling */
+.custom-map-tooltip {
+    background: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+    padding: 0 !important;
+}
+.leaflet-tooltip-top:before {
+    border-top-color: white !important;
+}
+.leaflet-tooltip-pane .leaflet-tooltip {
+    pointer-events: none; /* Prevents tooltip from blocking clicks on markers */
+}
+   </style>
+   
+   
 </head>
 <body class="h-screen flex flex-col">
     <div id="root" class="h-full"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-
+        const { useState, useEffect, useMemo, useRef } = React;
+        
         const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -96,7 +123,19 @@
             const [likes, setLikes] = useState({}); 
             const [comments, setComments] = useState({}); 
             const [newCommentText, setNewCommentText] = useState('');
-            const [isFilterOpen, setIsFilterOpen] = useState(false);          
+            const [isFilterOpen, setIsFilterOpen] = useState(false);       
+            
+            const [isPlannerOpen, setIsPlannerOpen] = useState(false);
+            const [selectedRoute, setSelectedRoute] = useState([]);
+            const mapRef = useRef(null);
+            const routeLayerRef = useRef(null);
+            const routingControlRef = useRef(null);
+            const currentRouteIdsRef = useRef("");
+            
+            const [hoveredPlaceId, setHoveredPlaceId] = useState(null);
+            const [routeDistance, setRouteDistance] = useState(0);
+            const [allLocationsLayer, setAllLocationsLayer] = useState(null);
+            const highlightLayerRef = useRef(null); 
             
             
 
@@ -109,10 +148,10 @@
                 logVisit();
             };
 
-            // Added isFilterOpen to dependency array
-            useEffect(() => { 
-                if (window.lucide) window.lucide.createIcons(); 
-            }, [places, searchTerm, filterTag, sortBy, isArticleOpen, comments, isFilterOpen]);
+            
+           useEffect(() => { 
+             if (window.lucide) window.lucide.createIcons(); 
+          }, [places, searchTerm, filterTag, sortBy, isArticleOpen, comments, isFilterOpen, isPlannerOpen, selectedRoute]);
 
             const fetchPlaces = async () => {
             const { data } = await supabaseClient
@@ -271,6 +310,133 @@ const getDeviceType = () => {
                 );
             } else { setUserCoords(DEFAULT_LOCATION); }
         };
+        
+        // Toggle place in route
+const toggleRoutePlace = (place) => {
+    setSelectedRoute(prev => 
+        prev.find(p => p.id === place.id) 
+            ? prev.filter(p => p.id !== place.id) 
+            : [...prev, place]
+    );
+};
+
+// Generate WhatsApp Share Link
+const shareToWhatsApp = () => {
+    if (selectedRoute.length === 0) return;
+    
+    // Start from user location or default
+    const origin = userCoords ? `${userCoords.lat},${userCoords.lng}` : `${DEFAULT_LOCATION.lat},${DEFAULT_LOCATION.lng}`;
+    // End at the last selected location
+    const destination = `${selectedRoute[selectedRoute.length-1].latitude},${selectedRoute[selectedRoute.length-1].longitude}`;
+    // Intermediate stops
+    const waypoints = selectedRoute.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
+
+    // Build Google Maps API URL
+    let gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
+    if (waypoints) gmapsUrl += `&waypoints=${waypoints}`;
+
+    const text = `Check out this adventure route I planned on My Journal!\n\n${gmapsUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+};
+
+useEffect(() => {
+    if (isPlannerOpen) {
+        setTimeout(() => {
+            const mapContainer = document.getElementById('planner-map');
+            if (!mapContainer) return;
+
+            const startLat = userCoords?.lat || DEFAULT_LOCATION.lat;
+            const startLng = userCoords?.lng || DEFAULT_LOCATION.lng;
+
+            // 1. Initialize Map
+            if (!mapRef.current) {
+                mapRef.current = L.map('planner-map', { zoomControl: false }).setView([startLat, startLng], 8);
+                // Using CartoDB Voyager tiles to avoid the OSM 403 Referrer error
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                    attribution: '© CARTO'
+                }).addTo(mapRef.current);
+                routeLayerRef.current = L.layerGroup().addTo(mapRef.current);
+            }
+
+            // 2. Clear previous markers to refresh hover colors
+            mapRef.current.eachLayer((layer) => {
+                if (layer instanceof L.CircleMarker) mapRef.current.removeLayer(layer);
+            });
+
+            // 3. Draw All Location Dots (Orange/Blue)
+            places.forEach(place => {
+                const isHovered = hoveredPlaceId === place.id;
+                const marker = L.circleMarker([place.latitude, place.longitude], {
+                    radius: isHovered ? 8 : 5,
+                    fillColor: isHovered ? "#3b82f6" : "#f97316",
+                    color: "#fff",
+                    weight: 2,
+                    fillOpacity: 1
+                })
+                .addTo(mapRef.current)
+                .bindTooltip(`<div class="font-bold text-[10px] uppercase p-1">${auditLocationName(place.place_name)}</div>`, { direction: 'top', opacity: 0.9 });
+
+                marker.on('mouseover', () => setHoveredPlaceId(place.id));
+                marker.on('mouseout', () => setHoveredPlaceId(null));
+            });
+
+            // 4. Implement Shortest/Fastest Routing
+            const newRouteSignature = selectedRoute.map(p => p.id).join(',');
+            if (selectedRoute.length > 0) {
+                if (currentRouteIdsRef.current !== newRouteSignature) {
+                    currentRouteIdsRef.current = newRouteSignature;
+                    
+                    const waypoints = [
+                        L.latLng(startLat, startLng), 
+                        ...selectedRoute.map(p => L.latLng(p.latitude, p.longitude))
+                    ];
+
+                    if (routingControlRef.current) {
+                        routingControlRef.current.setWaypoints(waypoints);
+                    } else {
+                        routingControlRef.current = L.Routing.control({
+                            waypoints: waypoints,
+                            // OSRM 'driving' profile automatically prioritizes fastest/shortest paths
+                            router: L.Routing.osrmv1({ 
+                                serviceUrl: 'https://router.project-osrm.org/route/v1',
+                                profile: 'driving' 
+                            }),
+                            lineOptions: { 
+                                styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }], // RED color
+                                extendToWaypoints: true,
+                                missingRouteTolerance: 0
+                            },
+                            createMarker: () => null, // Hide default routing pins
+                            addWaypoints: false,
+                            show: false
+                        }).on('routesfound', (e) => {
+                            const routes = e.routes;
+                            // Set total distance from the primary (fastest) route
+                            const dist = routes[0].summary.totalDistance / 1000;
+                            setRouteDistance(dist.toFixed(1));
+                        }).addTo(mapRef.current);
+                    }
+                }
+            } else {
+                setRouteDistance(0);
+                if (routingControlRef.current) {
+                    mapRef.current.removeControl(routingControlRef.current);
+                    routingControlRef.current = null;
+                    currentRouteIdsRef.current = "";
+                }
+            }
+        }, 50);
+    } else {
+        // Cleanup when modal closes
+        if (mapRef.current) {
+            mapRef.current.remove();
+            mapRef.current = null;
+            routingControlRef.current = null;
+            currentRouteIdsRef.current = "";
+        }
+    }
+}, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
+        
 
             const calculateDistance = (lat2, lon2) => {
             const ref = userCoords || DEFAULT_LOCATION;
@@ -301,14 +467,30 @@ const getDeviceType = () => {
                             </div>
                         </div>
                         
-                        {/* Mobile Filter Toggle Button */}
-                        <button 
+                        
+                        <div className="flex items-center gap-2">
+                        
+                        {/* Plan Route Button */}
+                        
+    <button 
+        onClick={() => setIsPlannerOpen(true)} 
+        className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-orange-600 transition-colors"
+    >
+        <i data-lucide="map" className="w-3 h-3"></i>
+        Plan Your Trip
+    </button>
+    
+    {/* Mobile Filter Toggle Button */}
+    
+    <button 
                             onClick={() => setIsFilterOpen(!isFilterOpen)} 
                             className="flex md:hidden items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase"
                         >
                             <i data-lucide="sliders-horizontal" className="w-3 h-3 text-orange-400"></i>
                             {isFilterOpen ? 'Close' : 'Filters'}
                         </button>
+                        
+</div>
                     </header>
 
                     {/* Dynamic visibility based on isFilterOpen state */}
@@ -518,6 +700,100 @@ const getDeviceType = () => {
         </div>
     </div>
 )}
+
+{/* Route Planner Modal */}
+
+{isPlannerOpen && (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-0 md:p-4">
+        <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-md" onClick={() => setIsPlannerOpen(false)}></div>
+        
+        <div className="relative bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col md:flex-row">
+            
+            {/* Left Side: Map Widget */}
+            <div className="h-[40vh] md:h-full md:w-2/3 bg-slate-100 relative z-0" id="planner-map"></div>
+
+            {/* Right Side: Selection Panel */}
+            <div className="flex-1 flex flex-col h-[60vh] md:h-full bg-white z-10">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+    <div>
+        <h2 className="text-xl font-black uppercase tracking-tighter italic">Route Planner</h2>
+        <div className="flex items-center gap-2 mt-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                {selectedRoute.length} Stops
+            </span>
+            {routeDistance > 0 && (
+                <span className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 px-2 py-0.5 rounded-lg border border-red-100 animate-pulse">
+                    {routeDistance} KM (Fastest)
+                </span>
+            )}
+        </div>
+    </div>
+    <button onClick={() => setIsPlannerOpen(false)} className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center transition-all">
+        <i data-lucide="x" className="w-5 h-5 text-slate-600"></i>
+    </button>
+</div>
+
+                <div className="flex-1 overflow-y-auto p-4 scrollable-list space-y-2">
+    {places.map(place => {
+        const isSelected = selectedRoute.find(p => p.id === place.id);
+        const isHovered = hoveredPlaceId === place.id;
+        
+        return (
+            <div 
+                key={place.id} 
+                onMouseEnter={() => setHoveredPlaceId(place.id)} 
+                onMouseLeave={() => setHoveredPlaceId(null)}
+                className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
+                    isSelected 
+                        ? 'border-orange-500 bg-orange-50' 
+                        : isHovered 
+                            ? 'border-blue-400 bg-blue-50/50' 
+                            : 'border-slate-100'
+                }`}
+            >
+                <div className="flex flex-col">
+                    <span className={`text-xs font-extrabold uppercase ${isHovered ? 'text-blue-600' : 'text-slate-900'}`}>
+                        {auditLocationName(place.place_name)}
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">
+                        {place.category} • {calculateDistance(place.latitude, place.longitude)} KM
+                    </span>
+                </div>
+                
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation(); 
+                        toggleRoutePlace(place);
+                    }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                        isSelected 
+                            ? 'bg-orange-500 text-white' 
+                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                    }`}
+                >
+                    <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
+                </button>
+            </div>
+        );
+    })}
+</div>
+
+                {/* Footer / Share Button */}
+                <div className="p-4 border-t border-slate-100 bg-slate-50">
+                    <button 
+                        onClick={shareToWhatsApp}
+                        disabled={selectedRoute.length === 0}
+                        className={`w-full py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 ${selectedRoute.length > 0 ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    >
+                        <i data-lucide="share-2" className="w-4 h-4"></i>
+                        Share to WhatsApp
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
+
                 </div>
             );
         }
