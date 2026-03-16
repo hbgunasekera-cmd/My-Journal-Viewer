@@ -154,6 +154,7 @@
             const [allLocationsLayer, setAllLocationsLayer] = useState(null);
             const highlightLayerRef = useRef(null); 
             
+            const [isFabExpanded, setIsFabExpanded] = React.useState(false);
             
 
             useEffect(() => { initApp(); }, []);
@@ -500,22 +501,44 @@ useEffect(() => {
                             {isFilterOpen ? 'Close' : 'Filters'}
                         </button>
                         
-{/* Optimized Floating Action Button */}
-<div className="mobile-fab-container pointer-events-none">
+{/* Optimized Adventure Engine FAB */}
+<div className="fixed bottom-6 right-6 z-[1000] flex items-end justify-end">
     <button 
-        onClick={() => setIsPlannerOpen(true)}
-        className="plan-trip-btn pointer-events-auto bg-slate-900 text-white px-8 py-4 rounded-full flex items-center gap-3 transition-all active:scale-95 group"
+        onClick={() => {
+            if (!isFabExpanded) {
+                setIsFabExpanded(true);
+            } else {
+                setIsPlannerOpen(true);
+                setIsFabExpanded(false); // Reset for next time or keep true if preferred
+            }
+        }}
+        onMouseLeave={() => setIsFabExpanded(false)} // Optional: collapses when mouse moves away on PC
+        className={`bg-slate-900 text-white shadow-2xl transition-all duration-500 ease-in-out flex items-center overflow-hidden group ${
+            isFabExpanded 
+                ? 'rounded-2xl px-6 py-4' 
+                : 'rounded-full w-14 h-14 justify-center'
+        }`}
     >
-        <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center group-hover:rotate-12 transition-transform">
-            <i data-lucide="map" className="w-4 h-4 text-white"></i>
+        {/* The Icon (Always visible) */}
+        <div className={`flex-shrink-0 bg-orange-500 rounded-full flex items-center justify-center transition-all duration-500 ${
+            isFabExpanded ? 'w-8 h-8 rotate-12' : 'w-10 h-10'
+        }`}>
+            <i data-lucide="map" className={`${isFabExpanded ? 'w-4 h-4' : 'w-5 h-5'} text-white`}></i>
         </div>
-        <div className="flex flex-col items-start">
-            <span className="text-[10px] font-black uppercase tracking-tighter leading-none">Adventure Engine</span>
-            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1">Plan Your Trip</span>
+
+        {/* The Text Content (Expands/Collapses) */}
+        <div className={`flex flex-col items-start transition-all duration-500 ease-in-out ${
+            isFabExpanded ? 'ml-3 opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'
+        }`}>
+            <span className="text-[10px] font-black uppercase tracking-tighter leading-none whitespace-nowrap">
+                Adventure Engine
+            </span>
+            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1 whitespace-nowrap">
+                Plan Your Trip
+            </span>
         </div>
     </button>
 </div>
-                        
 </div>
                     </header>
 
