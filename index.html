@@ -163,6 +163,7 @@
             
             const [isPlannerOpen, setIsPlannerOpen] = useState(false);
             const [selectedRoute, setSelectedRoute] = useState([]);
+            const [plannerSearch, setPlannerSearch] = React.useState('');
             const mapRef = useRef(null);
             const routeLayerRef = useRef(null);
             const routingControlRef = useRef(null);
@@ -350,11 +351,55 @@ const getDeviceType = () => {
         
         // Toggle place in route
 const toggleRoutePlace = (place) => {
-    setSelectedRoute(prev => 
-        prev.find(p => p.id === place.id) 
-            ? prev.filter(p => p.id !== place.id) 
-            : [...prev, place]
-    );
+    setSelectedRoute(prev => {
+        const isAlreadySelected = prev.find(p => p.id === place.id);
+        let newSelection;
+
+        // 1. Add or Remove the item first
+        if (isAlreadySelected) {
+            newSelection = prev.filter(p => p.id !== place.id);
+        } else {
+            newSelection = [...prev, place];
+        }
+
+        // 2. If 0 or 1 item, no reordering needed
+        if (newSelection.length <= 1 || !userCoords) return newSelection;
+
+        // 3. SEQUENTIAL REORDERING (Nearest Neighbor Algorithm)
+        const optimizedRoute = [];
+        let remainingOptions = [...newSelection];
+        
+        // Start from the user's current physical location
+        let currentPoint = { lat: userCoords.lat, lng: userCoords.lng };
+
+        while (remainingOptions.length > 0) {
+            let nearestIndex = 0;
+            let shortestDistance = Infinity;
+
+            for (let i = 0; i < remainingOptions.length; i++) {
+                const distance = calculateDistance(
+                    currentPoint.lat, 
+                    currentPoint.lng, 
+                    remainingOptions[i].latitude, 
+                    remainingOptions[i].longitude
+                );
+
+                if (distance < shortestDistance) {
+                    shortestDistance = distance;
+                    nearestIndex = i;
+                }
+            }
+
+            // Move the nearest location found to the optimized list
+            const nextStop = remainingOptions.splice(nearestIndex, 1)[0];
+            optimizedRoute.push(nextStop);
+
+            // Update current point to the location we just reached
+            currentPoint = { lat: nextStop.latitude, lng: nextStop.longitude };
+        }
+
+        return optimizedRoute;
+    });
 };
 
 // Generate WhatsApp Share Link
@@ -378,52 +423,73 @@ const shareToWhatsApp = () => {
 
 useEffect(() => {
     if (isPlannerOpen) {
-        setTimeout(() => {
+        // Small delay to ensure the DOM element 'planner-map' is rendered before Leaflet init
+        const timer = setTimeout(() => {
             const mapContainer = document.getElementById('planner-map');
             if (!mapContainer) return;
 
             const startLat = userCoords?.lat || DEFAULT_LOCATION.lat;
             const startLng = userCoords?.lng || DEFAULT_LOCATION.lng;
 
-            // 1. Initialize Map
+            // 1. Initialize Map Instance
             if (!mapRef.current) {
-                mapRef.current = L.map('planner-map', { zoomControl: false }).setView([startLat, startLng], 8);
-                // Using CartoDB Voyager tiles to avoid the OSM 403 Referrer error
+                mapRef.current = L.map('planner-map', { 
+                    zoomControl: false,
+                    attributionControl: true 
+                }).setView([startLat, startLng], 10);
+
+                // Use CartoDB Voyager tiles for a clean, professional look
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                    attribution: '© CARTO'
+                    attribution: '© OpenStreetMap contributors © CARTO',
+                    subdomains: 'abcd',
+                    maxZoom: 20
                 }).addTo(mapRef.current);
-                routeLayerRef.current = L.layerGroup().addTo(mapRef.current);
             }
 
-            // 2. Clear previous markers to refresh hover colors
+            // 2. Manage Visual Markers (Non-route pins)
+            // Clear existing circle markers to prevent duplicates on state updates
             mapRef.current.eachLayer((layer) => {
                 if (layer instanceof L.CircleMarker) mapRef.current.removeLayer(layer);
             });
 
-            // 3. Draw All Location Dots (Orange/Blue)
+            // Draw Location Markers with Hover Tooltips
             places.forEach(place => {
                 const isHovered = hoveredPlaceId === place.id;
+                const isSelected = selectedRoute.find(p => p.id === place.id);
+                const displayName = auditLocationName(place.place_name);
+
                 const marker = L.circleMarker([place.latitude, place.longitude], {
-                    radius: isHovered ? 8 : 5,
-                    fillColor: isHovered ? "#3b82f6" : "#f97316",
+                    radius: isHovered ? 8 : 6,
+                    fillColor: isSelected ? "#ef4444" : (isHovered ? "#3b82f6" : "#f97316"),
                     color: "#fff",
                     weight: 2,
-                    fillOpacity: 1
+                    fillOpacity: 1,
+                    zIndexOffset: isHovered ? 1000 : 0
                 })
                 .addTo(mapRef.current)
                 .bindTooltip(`
-    <div class="font-bold text-[10px] uppercase p-1">
-        ${auditLocationName(place.place_name)}
-    </div>
-`, { direction: 'top', opacity: 0.9 });
+                    <div style="padding: 2px 4px; font-family: sans-serif;">
+                        <p style="margin: 0; font-weight: 800; text-transform: uppercase; font-size: 10px; color: #0f172a;">
+                            ${displayName}
+                        </p>
+                    </div>
+                `, { 
+                    direction: 'top', 
+                    opacity: 0.9,
+                    offset: [0, -5]
+                });
 
+                // Sync Map hover back to List UI
                 marker.on('mouseover', () => setHoveredPlaceId(place.id));
                 marker.on('mouseout', () => setHoveredPlaceId(null));
+                marker.on('click', () => toggleRoutePlace(place));
             });
 
-            // 4. Implement Shortest/Fastest Routing
+            // 3. Implement Sequential Red Routing
             const newRouteSignature = selectedRoute.map(p => p.id).join(',');
+            
             if (selectedRoute.length > 0) {
+                // Only recalculate if the selection sequence or content actually changed
                 if (currentRouteIdsRef.current !== newRouteSignature) {
                     currentRouteIdsRef.current = newRouteSignature;
                     
@@ -437,28 +503,28 @@ useEffect(() => {
                     } else {
                         routingControlRef.current = L.Routing.control({
                             waypoints: waypoints,
-                            // OSRM 'driving' profile automatically prioritizes fastest/shortest paths
                             router: L.Routing.osrmv1({ 
                                 serviceUrl: 'https://router.project-osrm.org/route/v1',
-                                profile: 'driving' 
+                                profile: 'driving'
                             }),
                             lineOptions: { 
-                                styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }], // RED color
+                                styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }], // Google Maps Red
                                 extendToWaypoints: true,
                                 missingRouteTolerance: 0
                             },
-                            createMarker: () => null, // Hide default routing pins
+                            createMarker: () => null, // We use our own custom circle markers
                             addWaypoints: false,
-                            show: false
+                            show: false,
+                            fitSelectedRoutes: true
                         }).on('routesfound', (e) => {
                             const routes = e.routes;
-                            // Set total distance from the primary (fastest) route
                             const dist = routes[0].summary.totalDistance / 1000;
                             setRouteDistance(dist.toFixed(1));
                         }).addTo(mapRef.current);
                     }
                 }
             } else {
+                // Reset routing if selection is cleared
                 setRouteDistance(0);
                 if (routingControlRef.current) {
                     mapRef.current.removeControl(routingControlRef.current);
@@ -467,8 +533,10 @@ useEffect(() => {
                 }
             }
         }, 50);
+
+        return () => clearTimeout(timer);
     } else {
-        // Cleanup when modal closes
+        // Cleanup: Destroy map instance when modal closes to prevent memory leaks and ghost containers
         if (mapRef.current) {
             mapRef.current.remove();
             mapRef.current = null;
@@ -479,14 +547,15 @@ useEffect(() => {
 }, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
         
 
-            const calculateDistance = (lat2, lon2) => {
-            const ref = userCoords || DEFAULT_LOCATION;
-            const R = 6371; 
-            const dLat = (lat2 - ref.lat) * Math.PI / 180;
-            const dLon = (lon2 - ref.lng) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(ref.lat * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-            return (R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)))).toFixed(1);
-        };
+     const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+};
 
             const filteredAndSortedPlaces = useMemo(() => {
             let filtered = [...places];
@@ -776,7 +845,6 @@ useEffect(() => {
 )}
 
 {/* Route Planner Modal */}
-
 {isPlannerOpen && (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 md:p-4">
         {/* Backdrop */}
@@ -788,79 +856,114 @@ useEffect(() => {
         {/* Modal Container */}
         <div className="relative bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col md:flex-row">
             
-            {/* Left Side: Map Widget (Takes 40% height on mobile, full height on desktop) */}
+            {/* Left Side: Map Widget */}
             <div className="h-[40vh] md:h-full md:w-2/3 bg-slate-100 relative z-0" id="planner-map"></div>
 
             {/* Right Side: Selection Panel */}
             <div className="flex-1 flex flex-col h-[60vh] md:h-full bg-white z-10 border-t md:border-t-0 md:border-l border-slate-100">
                 
-                {/* Header with Live Distance */}
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
-                    <div>
-                        <h2 className="text-xl font-black uppercase tracking-tighter italic">Route Planner</h2>
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                {selectedRoute.length} Stops Selected
-                            </span>
-                            {routeDistance > 0 && (
-                                <span className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 px-2 py-0.5 rounded-lg border border-red-100 animate-pulse">
-                                    {routeDistance} KM (Fastest)
+                {/* Header Section */}
+                <div className="p-6 border-b border-slate-100 bg-white">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 className="text-xl font-black uppercase tracking-tighter italic">Route Planner</h2>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                    {selectedRoute.length} Stops Selected
                                 </span>
-                            )}
+                                {routeDistance > 0 && (
+                                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 px-2 py-0.5 rounded-lg border border-red-100 animate-pulse">
+                                        {routeDistance} KM (Fastest)
+                                    </span>
+                                )}
+                            </div>
                         </div>
+                        <button 
+                            onClick={() => setIsPlannerOpen(false)} 
+                            className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center transition-all"
+                        >
+                            <i data-lucide="x" className="w-5 h-5 text-slate-600"></i>
+                        </button>
                     </div>
-                    <button 
-                        onClick={() => setIsPlannerOpen(false)} 
-                        className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center transition-all"
-                    >
-                        <i data-lucide="x" className="w-5 h-5 text-slate-600"></i>
-                    </button>
+
+                    {/* Location Search Bar - Nested inside Header for better layout */}
+                    <div className="relative">
+                        <i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                        <input 
+                            type="text"
+                            placeholder="Search locations..."
+                            value={plannerSearch}
+                            onChange={(e) => setPlannerSearch(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-[10px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-orange-500 outline-none transition-all placeholder:text-slate-300"
+                        />
+                    </div>
                 </div>
 
-                {/* Scrollable Location List */}
+                {/* Scrollable Filtered Location List */}
                 <div className="flex-1 overflow-y-auto p-4 scrollable-list space-y-2">
-                    {places.map(place => {
-                        const isSelected = selectedRoute.find(p => p.id === place.id);
-                        const isHovered = hoveredPlaceId === place.id;
-                        
-                        return (
-                            <div 
-                                key={place.id} 
-                                onMouseEnter={() => setHoveredPlaceId(place.id)} 
-                                onMouseLeave={() => setHoveredPlaceId(null)}
-                                className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
-                                    isSelected 
-                                        ? 'border-orange-500 bg-orange-50 shadow-sm' 
-                                        : isHovered 
-                                            ? 'border-blue-400 bg-blue-50/50' 
-                                            : 'border-slate-100 hover:bg-slate-50'
-                                }`}
-                            >
-                                <div className="flex flex-col">
-                                    <span className={`text-xs font-extrabold uppercase ${isHovered ? 'text-blue-600' : 'text-slate-900'}`}>
-    {auditLocationName(place.place_name)}
-</span>
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase">
-                                        {place.category} • {calculateDistance(place.latitude, place.longitude)} KM
-                                    </span>
+                    {(() => {
+                        const filtered = places.filter(place => 
+                            place.place_name.toLowerCase().includes(plannerSearch.toLowerCase()) ||
+                            place.category.toLowerCase().includes(plannerSearch.toLowerCase())
+                        );
+
+                        if (filtered.length === 0) {
+                            return (
+                                <div className="py-12 text-center">
+                                    <i data-lucide="map-pin-off" className="w-8 h-8 text-slate-200 mx-auto mb-3"></i>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        No locations found
+                                    </p>
                                 </div>
-                                
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation(); 
-                                        toggleRoutePlace(place);
-                                    }}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                            );
+                        }
+
+                        return filtered.map(place => {
+                            const isSelected = selectedRoute.find(p => p.id === place.id);
+                            const isHovered = hoveredPlaceId === place.id;
+                            
+                            return (
+                                <div 
+                                    key={place.id} 
+                                    onMouseEnter={() => setHoveredPlaceId(place.id)} 
+                                    onMouseLeave={() => setHoveredPlaceId(null)}
+                                    onClick={() => toggleRoutePlace(place)}
+                                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
                                         isSelected 
-                                            ? 'bg-orange-500 text-white rotate-0 shadow-lg shadow-orange-500/20' 
-                                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                                            ? 'border-orange-500 bg-orange-50 shadow-sm' 
+                                            : isHovered 
+                                                ? 'border-blue-400 bg-blue-50/50' 
+                                                : 'border-slate-100 hover:bg-slate-50'
                                     }`}
                                 >
-                                    <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
-                                </button>
-                            </div>
-                        );
-                    })}
+                                    <div className="flex flex-col">
+                                        <span className={`text-xs font-extrabold uppercase transition-colors ${
+                                            isHovered ? 'text-blue-600' : 'text-slate-900'
+                                        }`}>
+                                            {auditLocationName(place.place_name)}
+                                        </span>
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase">
+                                            {place.category} • {calculateDistance(place.latitude, place.longitude)} KM
+                                        </span>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation(); 
+                                            toggleRoutePlace(place);
+                                        }}
+                                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                                            isSelected 
+                                                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' 
+                                                : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                        }`}
+                                    >
+                                        <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            );
+                        });
+                    })()}
                 </div>
 
                 {/* Footer / Share Action */}
