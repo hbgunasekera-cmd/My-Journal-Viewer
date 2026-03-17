@@ -543,13 +543,69 @@ useEffect(() => {
         
 
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // km
+    const R = 6371; // Earth's radius in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 };
+
+const displayPlaces = useMemo(() => {
+    let result = [...places];
+
+    // 1. Filter by Search Term
+    if (searchTerm) {
+        result = result.filter(p => 
+            p.place_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (p.district && p.district.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+    }
+
+    // 2. Filter by Category
+    if (filterTag !== 'All') {
+        result = result.filter(p => p.category === filterTag);
+    }
+
+    // 3. Apply Sorting (FIXED VALUES: 'recent' and 'distance')
+    if (sortBy === 'recent') {
+        // Sort by ID descending (assuming higher ID = newer)
+        result.sort((a, b) => b.id - a.id);
+    } else if (sortBy === 'distance' && userCoords) {
+        result.sort((a, b) => {
+            const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
+            const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
+            return distA - distB;
+        });
+    }
+
+    return result;
+}, [places, searchTerm, filterTag, sortBy, userCoords]);
+
+// Add this logic right before your "return (" statement
+const sortedPlaces = React.useMemo(() => {
+    // First, apply the filters
+    let result = places.filter(place =>
+        (filterTag === 'All' || place.category === filterTag) &&
+        (place.place_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         place.district.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    // Then, apply the sorting
+    if (sortBy === 'newest') {
+        // Sorts by ID descending (assuming higher ID = newer)
+        result.sort((a, b) => b.id - a.id);
+    } else if (sortBy === 'nearest' && userCoords) {
+        result.sort((a, b) => {
+            const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
+            const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
+            return distA - distB;
+        });
+    }
+
+    return result;
+}, [places, filterTag, searchTerm, sortBy, userCoords]);
 
             const filteredAndSortedPlaces = useMemo(() => {
             let filtered = [...places];
@@ -571,9 +627,6 @@ useEffect(() => {
         <h1 className="text-xl font-black tracking-tighter text-slate-800 sm:text-3xl transition-all">
             My Journal
         </h1>
-        <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-[9px] font-black uppercase rounded-full">
-            Viewer
-        </span>
     </div>
     <p className="text-slate-500 text-[10px] sm:text-xs font-medium leading-tight">
         Exploring nature, one destination at a time.
@@ -679,7 +732,10 @@ useEffect(() => {
 
                     <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
-                            {filteredAndSortedPlaces.map(place => (
+                        
+                           {/* Location Cards */}
+                           
+{displayPlaces.map(place => (
     <div key={place.id} className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl">
         {/* Image Section */}
         <div className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
@@ -687,6 +743,7 @@ useEffect(() => {
                 <img 
                     src={place.cover_photo_url} 
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                    alt={place.place_name}
                 />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
@@ -699,7 +756,6 @@ useEffect(() => {
         
         {/* Content Section */}
         <div className="p-4 flex flex-col flex-1">
-            {/* NEW: Locality & Category Row */}
             <div className="flex justify-between items-start mb-1">
                 <div className="flex flex-col min-w-0">
                     <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
@@ -711,12 +767,14 @@ useEffect(() => {
                 </span>
             </div>
 
-            {/* Distance Row */}
+            {/* FIXED: Distance Display with 4 arguments */}
             <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                {calculateDistance(place.latitude, place.longitude)} KM AWAY
+                {userCoords 
+                    ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY` 
+                    : "Location Access Required"}
             </div>
 
-            {/* Interactions (Likes/Comments) */}
+            {/* Interactions */}
             <div className="flex items-center gap-4 mb-4 px-1">
                 <button onClick={() => handleLike(place.id)} className="flex items-center gap-1.5 group transition-colors">
                     <i data-lucide="heart" className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 group-hover:fill-rose-500"></i>
@@ -732,10 +790,10 @@ useEffect(() => {
             <div className="grid grid-cols-3 gap-2 mt-auto">
                 <button 
                     onClick={() => window.open(
-                        place.google_maps_url || `https://www.google.com/maps?q=${place.latitude},${place.longitude}`, 
+                        place.google_maps_url || `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`, 
                         '_blank'
                     )} 
-                    className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100"
+                    className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100 hover:bg-slate-100 active:scale-95 transition-all"
                 >
                     Maps
                 </button>
@@ -743,9 +801,9 @@ useEffect(() => {
                 <button 
                     onClick={() => handleAlbumClick(place.photo_album_url)} 
                     disabled={!place.photo_album_url} 
-                    className={`py-2.5 rounded-xl text-[8px] font-black uppercase flex items-center justify-center gap-1 ${
+                    className={`py-2.5 rounded-xl text-[8px] font-black uppercase flex items-center justify-center gap-1 transition-all ${
                         place.photo_album_url 
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 transition-colors' 
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95' 
                             : 'bg-slate-50 text-slate-200 cursor-not-allowed'
                     }`}
                 >
@@ -755,7 +813,7 @@ useEffect(() => {
                 {place.ai_article && (
                     <button 
                         onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} 
-                        className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase"
+                        className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase hover:bg-emerald-700 active:scale-95 transition-all"
                     >
                         Read
                     </button>
