@@ -5,119 +5,101 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📸</text></svg>">
     <title>Adventure Journal - Viewer</title>
+
+    <meta property="og:title" content="My Journal - Adventure Travel">
+    <meta property="og:description" content="Explore my travel bucket list and join the adventure.">
+    <meta property="og:image" content="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&h=630">
+
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>   
     
-    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-
       gtag('config', 'G-VRVQHWP2BJ');
     </script>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-   
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
-    
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>    
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-      appId: "22ed1064-75f6-4be9-b034-e7facc2b03eb",
-      safari_web_id: "web.onesignal.auto.6105f257-238b-4911-b162-8e10850787a2",
-      notifyButton: {
-        enable: true,
-        size: 'medium',
-        theme: 'default',
-        position: 'bottom-right',
-        offset: {
-          bottom: '20px',
-          right: '20px'
-        },
-        text: {
-          'tip.state.unsubscribed': 'Subscribe to notifications',
-          'tip.state.subscribed': "You're subscribed to notifications",
-          'tip.state.blocked': "You've blocked notifications",
-          'message.prenotify': 'Click to subscribe to notifications',
-          'message.action.subscribed': "Thanks for subscribing!",
-          'message.action.resubscribed': "You're subscribed to notifications",
-          'message.action.unsubscribed': "You won't receive notifications again",
-          'dialog.main.title': 'Manage Site Notifications',
-          'dialog.main.button.subscribe': 'SUBSCRIBE',
-          'dialog.main.button.unsubscribe': 'UNSUBSCRIBE'
-        }
-      },
-      allowLocalhostAsSecureOrigin: true 
+        await OneSignal.init({
+          appId: "22ed1064-75f6-4be9-b034-e7facc2b03eb",
+          safari_web_id: "web.onesignal.auto.6105f257-238b-4911-b162-8e10850787a2",
+          notifyButton: {
+            enable: true,
+            size: 'medium',
+            position: 'bottom-right',
+            text: {
+              'tip.state.unsubscribed': 'Subscribe to notifications',
+              'tip.state.subscribed': "You're subscribed",
+              'message.prenotify': 'Click to subscribe to notifications',
+              'message.action.subscribed': "Thanks for subscribing!",
+            }
+          },
+          allowLocalhostAsSecureOrigin: true 
+        });
       });
-  });
-</script>
+    </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #F8FAFC; overflow: hidden; user-select: none; }
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #F8FAFC; 
+            overflow: hidden; 
+            user-select: none; 
+        }
+
+        /* UI Helpers */
         .scrollable-list::-webkit-scrollbar { width: 6px; }
         .scrollable-list::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
         .text-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-    
-    .leaflet-routing-container { display: none !important; }
-    /* Custom Map Tooltip Styling */
-.custom-map-tooltip {
-    background: white !important;
-    border: none !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-    padding: 0 !important;
-}
-.leaflet-tooltip-top:before {
-    border-top-color: white !important;
-}
-.leaflet-tooltip-pane .leaflet-tooltip {
-    pointer-events: none; /* Prevents tooltip from blocking clicks on markers */
-}
+        .leaflet-routing-container { display: none !important; }
+        
+        /* Custom Map Components */
+        .custom-map-tooltip {
+            background: white !important;
+            border: none !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+            padding: 0 !important;
+        }
+        .leaflet-tooltip-top:before { border-top-color: white !important; }
+        .leaflet-tooltip-pane .leaflet-tooltip { pointer-events: none; }
 
-.mobile-fab-container {
-    position: fixed;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    width: auto;
-    max-width: 90vw;
-    display: flex;
-    justify-content: center;
-}
+        .mobile-fab-container {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
 
-.plan-trip-btn {
-    box-shadow: 0 10px 25px -5px rgba(249, 115, 22, 0.4);
-    white-space: nowrap;
-}
+        .plan-trip-btn {
+            box-shadow: 0 10px 25px -5px rgba(249, 115, 22, 0.4);
+        }
 
-@keyframes icon-pulse {
-    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); }
-    70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
-    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
-}
+        @keyframes icon-pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+        }
 
-.animate-icon-highlight {
-    animation: icon-pulse 2s infinite;
-}
-   </style>
-   
-   
+        .animate-icon-highlight { animation: icon-pulse 2s infinite; }
+    </style>
 </head>
 <body class="h-screen flex flex-col">
     <div id="root" class="h-full"></div>
@@ -405,20 +387,27 @@ const toggleRoutePlace = (place) => {
 // Generate WhatsApp Share Link
 const shareToWhatsApp = () => {
     if (selectedRoute.length === 0) return;
+
+    const origin = userCoords ? `${userCoords.lat},${userCoords.lng}` : "";
+    const destination = `${selectedRoute[selectedRoute.length - 1].latitude},${selectedRoute[selectedRoute.length - 1].longitude}`;
     
-    // Start from user location or default
-    const origin = userCoords ? `${userCoords.lat},${userCoords.lng}` : `${DEFAULT_LOCATION.lat},${DEFAULT_LOCATION.lng}`;
-    // End at the last selected location
-    const destination = `${selectedRoute[selectedRoute.length-1].latitude},${selectedRoute[selectedRoute.length-1].longitude}`;
-    // Intermediate stops
-    const waypoints = selectedRoute.slice(0, -1).map(p => `${p.latitude},${p.longitude}`).join('|');
+    // Get intermediate stops (all selected places except the last one)
+    const waypoints = selectedRoute
+        .slice(0, -1)
+        .map(p => `${p.latitude},${p.longitude}`)
+        .join('|');
 
-    // Build Google Maps API URL
-    let gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
-    if (waypoints) gmapsUrl += `&waypoints=${waypoints}`;
+    // Build Google Maps URL
+    // FIX: Wrapped in backticks and corrected the structure
+    let gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+    
+    if (waypoints) {
+        gmapsUrl += `&waypoints=${waypoints}`;
+    }
 
-    const text = `Check out this adventure route I planned on My Journal!\n\n${gmapsUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    const message = `Check out my travel plan:\n\n${selectedRoute.map((p, i) => `${i + 1}. ${p.place_name}`).join('\n')}\n\nRoute: ${gmapsUrl}`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 };
 
 useEffect(() => {
@@ -547,14 +536,13 @@ useEffect(() => {
 }, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
         
 
-     const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 };
 
             const filteredAndSortedPlaces = useMemo(() => {
@@ -581,7 +569,41 @@ useEffect(() => {
                         
                         <div className="flex items-center gap-2">
                         
+        {/* Social Media Section */}
 
+<div className="mt-6 mb-4 px-4">
+    <div className="flex items-center gap-3 p-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <span className="text-[9px] font-black uppercase tracking-tighter text-slate-400 ml-2">
+            Follow:
+        </span>
+        
+        <div className="flex gap-2 flex-1 justify-end mr-1">
+       {/* Facebook Icon Button */}
+            <a 
+                href="https://web.facebook.com/profile.php?id=61571059524746" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-9 h-9 flex items-center justify-center bg-white rounded-xl border border-slate-200 hover:border-blue-400 hover:text-blue-600 transition-all shadow-sm active:scale-90"
+                title="Facebook"
+            >
+                <i data-lucide="facebook" className="w-4 h-4"></i>
+            </a>
+
+       {/* TikTok Icon Button */}
+            <a 
+                href="https://www.tiktok.com/@hbgunasekera" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-9 h-9 flex items-center justify-center bg-white rounded-xl border border-slate-200 hover:border-pink-400 hover:text-pink-600 transition-all shadow-sm active:scale-90"
+                title="TikTok"
+            >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.17-2.89-.6-4.13-1.47-.13-.09-.24-.19-.36-.28v5.82c.02 2.38-.88 4.79-2.73 6.31-2.13 1.83-5.41 2.13-7.85.83-2.6-1.39-3.96-4.59-3.15-7.41.65-2.5 2.93-4.52 5.51-4.78.33-.04.67-.04.99-.03v4.17c-.42-.11-.87-.13-1.3-.08-1.01.09-1.92.81-2.2 1.79-.34 1.14.23 2.5 1.34 3.01.81.38 1.82.26 2.5-.32.53-.44.78-1.12.79-1.81V0l.02.02z"/>
+                </svg>
+            </a>
+        </div>
+    </div>
+</div>
     
     {/* Mobile Filter Toggle Button */}
     
