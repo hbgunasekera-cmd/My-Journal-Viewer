@@ -123,15 +123,8 @@
 
 
       const auditLocationName = (name) => {
-    if (!name) return "";
-    // Regex breakdown:
-    // [^ ... ] -> Match anything NOT in this list
-    // a-zA-Z0-9 -> Keep alphanumeric
-    // \s -> Keep spaces
-    // \- -> Keep hyphens
-    // ' -> Keep apostrophes
-    // \. -> Keep dots (Added)
-    return name
+    if (!name) return "Unnamed Location";
+        return String(name)
         .replace(/[^a-zA-Z0-9\s\-'\.]/g, '') 
         .trim();
 };
@@ -147,24 +140,18 @@
             const [likes, setLikes] = useState({}); 
             const [comments, setComments] = useState({}); 
             const [newCommentText, setNewCommentText] = useState('');
-            const [isFilterOpen, setIsFilterOpen] = useState(false);       
-            
+            const [isFilterOpen, setIsFilterOpen] = useState(false);
             const [isPlannerOpen, setIsPlannerOpen] = useState(false);
             const [selectedRoute, setSelectedRoute] = useState([]);
             const [plannerSearch, setPlannerSearch] = React.useState('');
             const mapRef = useRef(null);
-            const routeLayerRef = useRef(null);
             const routingControlRef = useRef(null);
             const currentRouteIdsRef = useRef("");
-            
             const [hoveredPlaceId, setHoveredPlaceId] = useState(null);
             const [routeDistance, setRouteDistance] = useState(0);
-            const [allLocationsLayer, setAllLocationsLayer] = useState(null);
-            const highlightLayerRef = useRef(null); 
-            
             const [isFabExpanded, setIsFabExpanded] = React.useState(false);
             const [statusFilter, setStatusFilter] = React.useState('done');
-            
+            const markerRegistryRef = React.useRef({}); 
 
             useEffect(() => { initApp(); }, []);
 
@@ -177,8 +164,9 @@
 
             
            useEffect(() => { 
-             if (window.lucide) window.lucide.createIcons(); 
-          }, [places, searchTerm, filterTag, sortBy, isArticleOpen, comments, isFilterOpen, isPlannerOpen, selectedRoute]);
+    if (window.lucide) window.lucide.createIcons(); 
+
+}, [places, searchTerm, filterTag, sortBy, isArticleOpen, comments, isFilterOpen, isPlannerOpen, selectedRoute, plannerSearch]);
 
             const fetchPlaces = async () => {
     // Remove the .eq('status', 'done') filter to get everything
@@ -188,16 +176,7 @@
         .order('created_at', { ascending: false });
     setPlaces(data || []);
 };
-
-// Split data into categories
-const { completedPlaces, pendingPlaces, bucketListPlaces } = useMemo(() => {
-    return {
-        completedPlaces: places.filter(p => p.status === 'done'),
-        pendingPlaces: places.filter(p => p.status === 'pending'),
-        bucketListPlaces: places.filter(p => p.status === 'bucket')
-    };
-}, [places]);
-            
+      
 
 const handleAlbumClick = (albumUrl) => {
             if (!albumUrl) {
@@ -347,27 +326,22 @@ const getDeviceType = () => {
             } else { setUserCoords(DEFAULT_LOCATION); }
         };
         
-        // Toggle place in route
-const toggleRoutePlace = (place) => {
+        const toggleRoutePlace = (place) => {
     setSelectedRoute(prev => {
-        const isAlreadySelected = prev.find(p => p.id === place.id);
-        let newSelection;
+        // 1. Add or remove the place from the selection pool
+        const isSelected = prev.find(p => p.id === place.id);
+        const selectionPool = isSelected 
+            ? prev.filter(p => p.id !== place.id) 
+            : [...prev, place];
 
-        // 1. Add or Remove the item first
-        if (isAlreadySelected) {
-            newSelection = prev.filter(p => p.id !== place.id);
-        } else {
-            newSelection = [...prev, place];
-        }
+        if (selectionPool.length === 0) return [];
+        if (!userCoords) return selectionPool; // Fallback if GPS is off
 
-        // 2. If 0 or 1 item, no reordering needed
-        if (newSelection.length <= 1 || !userCoords) return newSelection;
-
-        // 3. SEQUENTIAL REORDERING (Nearest Neighbor Algorithm)
+        // 2. Sequential Reordering (Nearest Neighbor)
         const optimizedRoute = [];
-        let remainingOptions = [...newSelection];
+        let remainingOptions = [...selectionPool];
         
-        // Start from the user's current physical location
+        // Always start the calculation from the user's current position
         let currentPoint = { lat: userCoords.lat, lng: userCoords.lng };
 
         while (remainingOptions.length > 0) {
@@ -388,11 +362,11 @@ const toggleRoutePlace = (place) => {
                 }
             }
 
-            // Move the nearest location found to the optimized list
+            // Move the closest location found to the optimized list
             const nextStop = remainingOptions.splice(nearestIndex, 1)[0];
             optimizedRoute.push(nextStop);
 
-            // Update current point to the location we just reached
+            // Update current point to the location we just "arrived" at
             currentPoint = { lat: nextStop.latitude, lng: nextStop.longitude };
         }
 
@@ -414,8 +388,7 @@ const shareToWhatsApp = () => {
         .join('|');
 
     // Build Google Maps URL
-    // FIX: Wrapped in backticks and corrected the structure
-    let gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+    let gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
     
     if (waypoints) {
         gmapsUrl += `&waypoints=${waypoints}`;
@@ -426,102 +399,57 @@ const shareToWhatsApp = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 };
 
+
 useEffect(() => {
     if (isPlannerOpen) {
-        // Small delay to ensure the DOM element 'planner-map' is rendered before Leaflet init
         const timer = setTimeout(() => {
             const mapContainer = document.getElementById('planner-map');
             if (!mapContainer) return;
 
-            const startLat = userCoords?.lat || DEFAULT_LOCATION.lat;
-            const startLng = userCoords?.lng || DEFAULT_LOCATION.lng;
-
-            // 1. Initialize Map Instance
+            // Initialize Map
             if (!mapRef.current) {
                 mapRef.current = L.map('planner-map', { 
                     zoomControl: false,
                     attributionControl: true 
-                }).setView([startLat, startLng], 10);
+                }).setView([userCoords?.lat || 7.8731, userCoords?.lng || 80.7718], 10);
 
-                // Use CartoDB Voyager tiles for a clean, professional look
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                    attribution: '© OpenStreetMap contributors © CARTO',
+                    attribution: '© OpenStreetMap © CARTO',
                     subdomains: 'abcd',
                     maxZoom: 20
                 }).addTo(mapRef.current);
             }
 
-            // 2. Manage Visual Markers (Non-route pins)
-            // Clear existing circle markers to prevent duplicates on state updates
-            mapRef.current.eachLayer((layer) => {
-                if (layer instanceof L.CircleMarker) mapRef.current.removeLayer(layer);
+            // Update Markers without full redraw
+            places.forEach(place => {
+                const isHovered = hoveredPlaceId === place.id;
+                const isSelected = selectedRoute.find(p => p.id === place.id);
+                const markerColor = isHovered ? "#3b82f6" : isSelected ? "#ef4444" : place.status === 'done' ? "#10b981" : "#f97316";
+
+                if (!markerRegistryRef.current[place.id]) {
+                    const marker = L.circleMarker([place.latitude, place.longitude], {
+                        radius: 6, fillColor: markerColor, color: "#fff", weight: 2, fillOpacity: 1
+                    }).addTo(mapRef.current);
+
+                    marker.bindTooltip(place.place_name, { direction: 'top', offset: [0, -5] });
+                    marker.on('click', () => setHoveredPlaceId(place.id));
+                    markerRegistryRef.current[place.id] = marker;
+                } else {
+                    const marker = markerRegistryRef.current[place.id];
+                    marker.setStyle({ fillColor: markerColor, radius: isHovered ? 9 : 6 });
+                    if (isHovered || isSelected) marker.bringToFront();
+                }
             });
 
-            // Locate this section inside the useEffect that handles (isPlannerOpen)
-// ~ Line 438 in your current file
+            // Routing Engine Implementation
+            const routeSignature = selectedRoute.map(p => p.id).join(',');
+            if (currentRouteIdsRef.current !== routeSignature) {
+                currentRouteIdsRef.current = routeSignature;
 
-places.forEach(place => {
-    const isHovered = hoveredPlaceId === place.id;
-    const isSelected = selectedRoute.find(p => p.id === place.id);
-    const isCompleted = place.status === 'done';
-    const isPending = place.status === 'pending';
-
-    // COLOR LOGIC:
-    // 1. If hovered -> Blue (#3b82f6)
-    // 2. If selected in route -> Red (#ef4444)
-    // 3. If status is done -> Green (#10b981)
-    // 4. Default/Pending -> Orange (#f97316)
-    const markerColor = isHovered 
-        ? "#3b82f6" 
-        : isSelected 
-            ? "#ef4444" 
-            : isCompleted 
-                ? "#10b981" 
-                : "#f97316";
-
-    const marker = L.circleMarker([place.latitude, place.longitude], {
-        radius: isHovered ? 8 : 6,
-        fillColor: markerColor,
-        color: "#fff", // White border for contrast
-        weight: 2,
-        fillOpacity: 1,
-        zIndexOffset: isHovered ? 1000 : 0
-    })
-    .addTo(mapRef.current)
-    .bindTooltip(`
-        <div style="padding: 2px 4px; font-family: 'Plus Jakarta Sans', sans-serif;">
-            <p style="margin: 0; font-weight: 800; font-size: 10px; text-transform: uppercase;">
-                ${auditLocationName(place.place_name)}
-            </p>
-            <p style="margin: 0; font-size: 8px; color: #64748b; font-weight: 600; text-transform: uppercase;">
-                ${isCompleted ? '✓ Completed' : '○ Pending'} • ${place.district}
-            </p>
-        </div>
-    `, { 
-        permanent: false, 
-        direction: 'top', 
-        className: 'custom-map-tooltip',
-        offset: [0, -5]
-    });
-
-    // IMPLEMENTATION: Click on location highlights it in blue on the map widget
-    marker.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-        setHoveredPlaceId(place.id); // Triggers the blue highlight state
-    });
-});
-
-            // 3. Implement Sequential Red Routing
-            const newRouteSignature = selectedRoute.map(p => p.id).join(',');
-            
-            if (selectedRoute.length > 0) {
-                // Only recalculate if the selection sequence or content actually changed
-                if (currentRouteIdsRef.current !== newRouteSignature) {
-                    currentRouteIdsRef.current = newRouteSignature;
-                    
+                if (selectedRoute.length > 0 && userCoords) {
                     const waypoints = [
-                        L.latLng(startLat, startLng), 
-                        ...selectedRoute.map(p => L.latLng(p.latitude, p.longitude))
+                        L.latLng(userCoords.lat, userCoords.lng), // Origin
+                        ...selectedRoute.map(p => L.latLng(p.latitude, p.longitude)) // Sequence
                     ];
 
                     if (routingControlRef.current) {
@@ -529,50 +457,34 @@ places.forEach(place => {
                     } else {
                         routingControlRef.current = L.Routing.control({
                             waypoints: waypoints,
-                            router: L.Routing.osrmv1({ 
-                                serviceUrl: 'https://router.project-osrm.org/route/v1',
-                                profile: 'driving'
-                            }),
-                            lineOptions: { 
-                                styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }], // Google Maps Red
-                                extendToWaypoints: true,
-                                missingRouteTolerance: 0
-                            },
-                            createMarker: () => null, // We use our own custom circle markers
+                            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
+                            lineOptions: { styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }] },
+                            createMarker: () => null, // Hide default blue pins
                             addWaypoints: false,
                             show: false,
                             fitSelectedRoutes: true
                         }).on('routesfound', (e) => {
-                              const routes = e.routes;
-                              const summary = routes[0].summary;
-                              const totalKm = (summary.totalDistance / 1000).toFixed(1);
-                              setRouteDistance(totalKm);
-                             }).addTo(mapRef.current);
+                            setRouteDistance((e.routes[0].summary.totalDistance / 1000).toFixed(1));
+                        }).addTo(mapRef.current);
+                    }
+                } else {
+                    // Clear route line if selection is emptied
+                    if (routingControlRef.current) {
+                        mapRef.current.removeControl(routingControlRef.current);
+                        routingControlRef.current = null;
+                        setRouteDistance(0);
                     }
                 }
-            } else {
-                // Reset routing if selection is cleared
-                setRouteDistance(0);
-                if (routingControlRef.current) {
-                    mapRef.current.removeControl(routingControlRef.current);
-                    routingControlRef.current = null;
-                    currentRouteIdsRef.current = "";
-                }
             }
-        }, 50);
-
+        }, 100);
         return () => clearTimeout(timer);
-    } else {
-        // Cleanup: Destroy map instance when modal closes to prevent memory leaks and ghost containers
-        if (mapRef.current) {
-            mapRef.current.remove();
-            mapRef.current = null;
-            routingControlRef.current = null;
-            currentRouteIdsRef.current = "";
-        }
+    } else if (mapRef.current) {
+        // Cleanup on close
+        mapRef.current.remove();
+        mapRef.current = null;
+        markerRegistryRef.current = {};
     }
 }, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
-        
 
     const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // km
@@ -586,64 +498,29 @@ places.forEach(place => {
 };
 
 const displayPlaces = React.useMemo(() => {
-    // 1. Filter by Status, Search, and Category
-    let result = places.filter(place => {
-        const matchesStatus = place.status === statusFilter; // 'done' or 'pending'
-        const matchesCategory = filterTag === 'All' || place.category === filterTag;
-        const matchesSearch = place.place_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              (place.district && place.district.toLowerCase().includes(searchTerm.toLowerCase()));
-        
-        return matchesStatus && matchesCategory && matchesSearch;
-    });
-
-    // 2. Apply Sorting Logic (Sync with dropdown values)
-    if (sortBy === 'recent') {
-        result.sort((a, b) => b.id - a.id);
-    } else if (sortBy === 'distance' && userCoords) {
-        result.sort((a, b) => {
-            const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
-            const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
-            return distA - distB;
-        });
-    }
-
-    return result;
-}, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
-
-const sortedPlaces = React.useMemo(() => {
-    // 1. Filter by Status, Search, and Category
-    let result = places.filter(place => {
+    return places.filter(place => {
         const matchesStatus = place.status === statusFilter;
         const matchesCategory = filterTag === 'All' || place.category === filterTag;
-        const matchesSearch = place.place_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              place.district.toLowerCase().includes(searchTerm.toLowerCase());
         
+        
+        const name = (place.place_name || "").toLowerCase();
+        const district = (place.district || "").toLowerCase();
+        const search = (searchTerm || "").toLowerCase();
+        
+        const matchesSearch = name.includes(search) || district.includes(search);
         return matchesStatus && matchesCategory && matchesSearch;
-    });
-
-    // 2. Apply Sorting Logic (Recent/Distance)
-    if (sortBy === 'recent') {
-        result.sort((a, b) => b.id - a.id);
-    } else if (sortBy === 'distance' && userCoords) {
-        result.sort((a, b) => {
+    }).sort((a, b) => {
+        if (sortBy === 'recent') return b.id - a.id;
+        if (sortBy === 'distance' && userCoords) {
             const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
             const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
             return distA - distB;
-        });
-    }
-
-    return result;
+        }
+        return 0;
+    });
 }, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
 
-const mapMarkers = React.useMemo(() => {
-    // Ensure both 'done' and 'pending' are included
-    return places
-        .filter(p => p.status === 'done' || p.status === 'pending')
-        .map(p => ({
-            ...p,
-            markerColor: p.status === 'done' ? '#0f172a' : '#f59e0b' // Slate-900 for Done, Amber-500 for Pending
-        }));
-}, [places]);
+
 
 const clearSelectedRoute = () => {
     if (window.confirm("Are you sure you want to clear all selected locations?")) {
@@ -651,12 +528,6 @@ const clearSelectedRoute = () => {
     }
 };
 
-            const filteredAndSortedPlaces = useMemo(() => {
-            let filtered = [...places];
-            if (searchTerm.trim() !== "") filtered = filtered.filter(p => p.place_name.toLowerCase().includes(searchTerm.toLowerCase()));
-            if (filterTag !== 'All') filtered = filtered.filter(p => p.category === filterTag);
-            return filtered.sort((a, b) => sortBy === 'distance' ? parseFloat(calculateDistance(a.latitude, a.longitude)) - parseFloat(calculateDistance(b.latitude, b.longitude)) : new Date(b.created_at) - new Date(a.created_at));
-        }, [places, searchTerm, filterTag, sortBy, userCoords]);
 
             return (
                 <div className="h-full flex flex-col max-w-7xl mx-auto">
@@ -892,9 +763,9 @@ const clearSelectedRoute = () => {
             <div className="grid grid-cols-3 gap-2 mt-auto">
                 <button 
                     onClick={() => window.open(
-                        place.google_maps_url || `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`, 
-                        '_blank'
-                    )} 
+    place.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`, 
+    '_blank'
+)}
                     className="py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[8px] font-black uppercase border border-slate-100 hover:bg-slate-100 active:scale-95 transition-all"
                 >
                     Maps
@@ -938,7 +809,7 @@ const clearSelectedRoute = () => {
                     <h2 className="text-2xl font-black uppercase tracking-tighter">{auditLocationName(viewingArticle.place_name)}</h2>
                  
                     <button 
-                        onClick={() => { window.open(viewingArticle.google_maps_url || `https://www.google.com/maps?q=${viewingArticle.latitude},${viewingArticle.longitude}`, '_blank'); }}
+                        onClick={() => { window.open(viewingArticle.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${viewingArticle.latitude},${viewingArticle.longitude}`, '_blank'); }}
                         className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
                     >
                         <i data-lucide="map-pin" className="w-4 h-4 text-slate-600"></i>
@@ -1066,16 +937,16 @@ const clearSelectedRoute = () => {
                                 
                                 {selectedRoute.length > 0 && (
                                     <button 
-                                        onClick={() => {
-                                            if(window.confirm("Clear all selected locations?")) {
-                                                setSelectedRoute([]);
-                                                setRouteDistance(0);
-                                            }
-                                        }}
-                                        className="text-[9px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 px-2 py-1 rounded-md border border-red-100 transition-colors"
-                                    >
-                                        Clear All
-                                    </button>
+    onClick={() => {
+        setPlannerSearch('');
+        setSelectedRoute([]); // This resets the list and the map icons/lines
+        setRouteDistance(0);
+    }}
+    className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 flex items-center gap-2 text-xs"
+>
+    <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+    Clear Route
+</button>
                                 )}
                             </div>
                         </div>
@@ -1102,10 +973,17 @@ const clearSelectedRoute = () => {
                 {/* FIXED SIZE LOCATION LIST - Scrollable */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-white">
                     {(() => {
-                        const filtered = places.filter(place => 
-                            (place.status === 'done' || place.status === 'pending') && 
-                            place.place_name.toLowerCase().includes(plannerSearch.toLowerCase())
-                        );
+                       const filtered = places.filter(place => {
+    // NULL-SAFE PLANNER SEARCH
+    const safeName = (place.place_name || "").toLowerCase();
+    const safeCategory = (place.category || "").toLowerCase();
+    const search = (plannerSearch || "").toLowerCase();
+    
+    const matchesStatus = (place.status === 'done' || place.status === 'pending');
+    const matchesSearch = safeName.includes(search) || safeCategory.includes(search);
+    
+    return matchesStatus && matchesSearch;
+});
 
                         if (filtered.length === 0) {
                             return (
