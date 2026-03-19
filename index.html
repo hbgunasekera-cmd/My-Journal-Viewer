@@ -111,6 +111,28 @@
     height: calc(100vh - 280px); /* Adjusts based on the new smaller header */
     overflow-y: auto;
 }
+
+/* Fix Google Maps Autocomplete Z-Index Bug */
+.pac-container {
+    z-index: 10000 !important; /* Forces it above your z-[3000] modal */
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    border: none;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    margin-top: 8px;
+}
+.pac-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #0f172a;
+}
+.pac-item:hover {
+    background-color: #f8fafc;
+}
+.pac-item-query {
+    font-size: 14px;
+}
         
         h1 { white-space: nowrap; }
     </style>
@@ -1283,12 +1305,16 @@ const clearSelectedRoute = () => {
             <div className="relative">
                 <i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
                 <input 
-                    id="location-search"
-                    type="text" 
-                    required
-                    placeholder="Search Google Maps..."
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-medium"
-                />
+    id="location-search"
+    type="text" 
+    required
+    placeholder="Search Google Maps..."
+    onKeyDown={(e) => {
+        // Prevents the form from submitting when you press Enter to select a map suggestion
+        if (e.key === 'Enter') e.preventDefault(); 
+    }}
+    className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-medium"
+/>
             </div>
             <p className="text-[9px] text-slate-400 italic ml-1">Coordinates and District are fetched automatically upon selection.</p>
         </div>
