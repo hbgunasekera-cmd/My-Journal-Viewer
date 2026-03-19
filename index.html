@@ -183,6 +183,7 @@ const [places, setPlaces] = useState([]);
     const [isAddExpanded, setIsAddExpanded] = React.useState(false);
     const [statusFilter, setStatusFilter] = React.useState('done');    
     const mapRef = useRef(null);
+    const tempMarkerRef = useRef(null);
     const addMapRef = useRef(null);
     const markerRegistryRef = useRef({});
     const routingControlRef = useRef(null);
@@ -244,13 +245,15 @@ useEffect(() => {
             attributionControl: false 
         }).setView([7.87, 80.77], 7);
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(addMapRef.current);
+        // 🟢 FIX 1: Change to Voyager (Colored Map) instead of light_all
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(addMapRef.current);
 
+        // Draw existing places as small gray dots with tooltips
         places.forEach(p => {
             if (p.latitude && p.longitude) {
                 L.circleMarker([p.latitude, p.longitude], {
-                    radius: 4, fillColor: '#94a3b8', color: '#fff', weight: 1, fillOpacity: 0.5
-                }).addTo(addMapRef.current);
+                    radius: 5, fillColor: '#94a3b8', color: '#fff', weight: 1, fillOpacity: 0.8
+                }).bindTooltip(p.place_name, { direction: 'top', textOnly: true }).addTo(addMapRef.current);
             }
         });
     }, 100);
@@ -572,24 +575,45 @@ useEffect(() => {
                 });
 
                 autocompleteRef.current.addListener("place_changed", () => {
-                    const place = autocompleteRef.current.getPlace();
-                    if (!place.geometry) return;
+    const place = autocompleteRef.current.getPlace();
+    if (!place.geometry) return;
 
-                    const lat = place.geometry.location.lat();
-                    const lng = place.geometry.location.lng();
-                    const districtName = place.address_components?.find(c => 
-                        c.types.includes("administrative_area_level_2")
-                    )?.long_name || '';
+    const lat = place.geometry.location.lat();
+    const lng = place.geometry.location.lng();
+    const districtName = place.address_components?.find(c => 
+        c.types.includes("administrative_area_level_2")
+    )?.long_name || '';
 
-                    setFormData(prev => ({
-                        ...prev,
-                        place_name: place.name,
-                        latitude: lat,
-                        longitude: lng,
-                        map_url: place.url,
-                        district: districtName
-                    }));
-                });
+    setFormData(prev => ({
+        ...prev,
+        place_name: place.name,
+        latitude: lat,
+        longitude: lng,
+        map_url: place.url,
+        district: districtName
+    }));
+
+    // 🟢 FIX 2: Plot the Yellow Dot
+    if (addMapRef.current) {
+        addMapRef.current.setView([lat, lng], 14); // Zoom in on the new spot
+        
+        // Remove the previous yellow dot if the user searched again
+        if (tempMarkerRef.current) {
+            addMapRef.current.removeLayer(tempMarkerRef.current);
+        }
+
+        // Add the new bright yellow dot
+        tempMarkerRef.current = L.circleMarker([lat, lng], {
+            radius: 8,
+            fillColor: '#facc15', // Tailwind Yellow-400
+            color: '#ca8a04', // Tailwind Yellow-600 border
+            weight: 3,
+            fillOpacity: 1
+        })
+        .bindTooltip("★ Selected Location", { permanent: true, direction: 'top' })
+        .addTo(addMapRef.current);
+    }
+});
             } catch (err) {
                 console.error("Google Maps Places library failed to load:", err);
             }
@@ -604,12 +628,38 @@ useEffect(() => {
 const handleAddPlace = async (e) => {
     e.preventDefault();
 
-    // Prevent submission if the user didn't pick from the Google dropdown
     if (!formData.latitude) {
         alert("Please select a location from the search suggestions dropdown.");
         return;
     }
 
+    // 🟢 FIX 3: Duplicate Validation Logic
+    const normalizedName = formData.place_name.trim().toLowerCase();
+    const latFixed = parseFloat(formData.latitude).toFixed(4);
+    const lngFixed = parseFloat(formData.longitude).toFixed(4);
+    const formUrl = formData.map_url || "";
+
+    const isDuplicate = places.some(p => {
+        // Check Name
+        const nameMatch = p.place_name && p.place_name.toLowerCase() === normalizedName;
+        
+        // Check Coordinates (up to 4 decimal places / ~11 meters)
+        const coordMatch = p.latitude && p.longitude && 
+                           parseFloat(p.latitude).toFixed(4) === latFixed && 
+                           parseFloat(p.longitude).toFixed(4) === lngFixed;
+        
+        // Check Google Maps URL (using the specific DB column name 'google_maps_url')
+        const urlMatch = formUrl && p.google_maps_url && p.google_maps_url === formUrl;
+
+        return nameMatch || coordMatch || urlMatch;
+    });
+
+    if (isDuplicate) {
+        alert("⚠️ Verification Failed: This location (Name, Coordinates, or Map Link) already exists in your Journal!");
+        return; // Stops execution, preventing the database insert
+    }
+
+    // If it passes validation, submit to pending_approvals
     try {
         const { error } = await supabaseClient
             .from('pending_approvals') 
@@ -630,6 +680,12 @@ const handleAddPlace = async (e) => {
             map_url: '', image_url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b',
             status: 'pending', category: 'Waterfall'
         });
+
+        // Clean up the yellow marker so it's fresh next time
+        if (tempMarkerRef.current && addMapRef.current) {
+            addMapRef.current.removeLayer(tempMarkerRef.current);
+            tempMarkerRef.current = null;
+        }
 
     } catch (err) {
         alert("Error sending request: " + err.message);
