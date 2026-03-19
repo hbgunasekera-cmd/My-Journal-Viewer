@@ -133,6 +133,14 @@
 .pac-item-query {
     font-size: 14px;
 }
+@keyframes slow-blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.animate-adventure {
+    animation: slow-blink 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
         
         h1 { white-space: nowrap; }
     </style>
@@ -191,6 +199,8 @@ const [places, setPlaces] = useState([]);
     const currentRouteIdsRef = useRef("");
     const autocompleteRef = useRef(null);;
     const [tempLocation, setTempLocation] = useState(null);
+    const [isEngineOpen, setIsEngineOpen] = React.useState(false);
+    const [isSocialOpen, setIsSocialOpen] = React.useState(false);
     const [formData, setFormData] = useState({
         place_name: '',
         district: '',
@@ -797,102 +807,74 @@ const clearSelectedRoute = () => {
         {isFilterOpen ? 'Close' : 'Filters'}
     </button>
 
-    {/* 2. Combined Right-Side Floating Action Stack */}
-    <div className="fixed bottom-6 right-6 z-[2000] flex flex-col items-end gap-3">
-        
-        {/* NEW: Add Location Button (Round-to-Tablet) */}
-        <div 
-            className={`flex items-center transition-all duration-500 ease-out overflow-hidden shadow-xl ${
-                isAddExpanded 
-                    ? 'bg-indigo-600 w-48 h-14 rounded-2xl px-4 cursor-pointer' 
-                    : 'bg-slate-900 w-14 h-14 rounded-full cursor-pointer'
-            }`}
-            onMouseEnter={() => setIsAddExpanded(true)}
-            onMouseLeave={() => setIsAddExpanded(false)}
-            onClick={() => setisAddOpen(true)}
-        >
-            <div className="flex items-center gap-3 text-white whitespace-nowrap">
-                <i data-lucide="plus-circle" className="w-6 h-6 shrink-0"></i>
-                {isAddExpanded && (
-                    <span className="font-black uppercase text-[10px] tracking-widest animate-in fade-in slide-in-from-left-2">
-                        Add Location
-                    </span>
-                )}
-            </div>
-        </div>
+    {/* --- DUAL HUB SYSTEM --- */}
+    {/* Logic: Hide hubs if any full-screen modal/form is active */}
+    {!isAddOpen && !isPlannerOpen && (
+        <div className="fixed bottom-6 right-6 z-[4000] flex flex-col items-end gap-6">
 
-        {/* Consolidated Social Media Button (Round-to-Tablet) */}
-        <div 
-            className={`flex items-center transition-all duration-500 ease-out overflow-hidden shadow-xl ${
-                isSocialExpanded 
-                    ? 'bg-white w-48 h-14 rounded-2xl px-2' 
-                    : 'bg-slate-900 w-14 h-14 rounded-full'
-            }`}
-        >
-            {!isSocialExpanded ? (
-                <button 
-                    onClick={() => setIsSocialExpanded(true)}
-                    className="w-full h-full flex items-center justify-center text-white"
-                >
-                    <i data-lucide="share-2" className="w-6 h-6"></i>
-                </button>
-            ) : (
-                <div className="flex items-center justify-between w-full px-2 gap-2 animate-in fade-in zoom-in-95">
-                    <a 
-                        href="https://web.facebook.com/profile.php?id=61571059524746" 
-                        target="_blank" 
-                        className="p-2.5 bg-blue-600 text-white rounded-xl hover:scale-110 transition-transform"
-                    >
+            {/* HUB 1: SOCIAL HUB (Facebook, TikTok) */}
+            <div className="flex flex-col items-end gap-3">
+                <div className={`flex items-center gap-2 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-2xl border border-slate-200 transition-all duration-500 ${
+                    isSocialOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-90 pointer-events-none'
+                }`}>
+                    <a href="https://web.facebook.com/profile.php?id=61571059524746" target="_blank" className="p-3 bg-blue-600 text-white rounded-xl hover:scale-110 transition-transform">
                         <i data-lucide="facebook" className="w-5 h-5"></i>
                     </a>
-                    <a 
-                        href="https://www.tiktok.com/@hbgunasekera" 
-                        target="_blank" 
-                        className="p-2.5 bg-black text-white rounded-xl hover:scale-110 transition-transform"
-                    >
-                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                            <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.17-2.89-.6-4.13-1.47-.14 1.34-.14 2.68-.12 4.02.01 2.54-.78 5.25-2.73 6.94-1.93 1.75-4.8 2.22-7.2 1.55-2.61-.64-4.81-2.91-5.18-5.59-.44-2.81.74-5.99 3.16-7.51 1.48-.96 3.32-1.35 5.06-1.1v4.1c-1.25-.19-2.62.15-3.51 1.05-.97 1-.95 2.76-.05 3.8.84.99 2.37 1.25 3.51.72 1.13-.5 1.71-1.74 1.7-2.98.02-3.13.01-6.27.01-9.41z"/>
-                        </svg>
+                    <a href="https://www.tiktok.com/@hbgunasekera" target="_blank" className="p-3 bg-black text-white rounded-xl hover:scale-110 transition-transform">
+                        <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.17-2.89-.6-4.13-1.47-.14 1.34-.14 2.68-.12 4.02.01 2.54-.78 5.25-2.73 6.94-1.93 1.75-4.8 2.22-7.2 1.55-2.61-.64-4.81-2.91-5.18-5.59-.44-2.81.74-5.99 3.16-7.51 1.48-.96 3.32-1.35 5.06-1.1v4.1c-1.25-.19-2.62.15-3.51 1.05-.97 1-.95 2.76-.05 3.8.84.99 2.37 1.25 3.51.72 1.13-.5 1.71-1.74 1.7-2.98.02-3.13.01-6.27.01-9.41z"/></svg>
                     </a>
-                    <button 
-                        onClick={() => setIsSocialExpanded(false)}
-                        className="p-2.5 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200"
-                    >
-                        <i data-lucide="x" className="w-5 h-5"></i>
-                    </button>
                 </div>
-            )}
-        </div>
-        
-        {/* Adventure Engine Button (On Bottom) */}
-        <button 
-            onClick={() => {
-                if (!isFabExpanded) setIsFabExpanded(true);
-                else { setIsPlannerOpen(true); setIsFabExpanded(false); }
-            }}
-            onMouseLeave={() => setIsFabExpanded(false)}
-            className={`bg-slate-900 text-white shadow-2xl transition-all duration-500 ease-in-out flex items-center overflow-hidden group ${
-                isFabExpanded 
-                    ? 'rounded-2xl px-6 py-4' 
-                    : 'rounded-full w-14 h-14 justify-center'
-            }`}
-        >
-            <div className={`flex-shrink-0 bg-orange-500 rounded-full flex items-center justify-center transition-all duration-500 ${
-                isFabExpanded ? 'w-8 h-8 rotate-12' : 'w-10 h-10 animate-icon-highlight' 
-            }`}>
-                <i data-lucide="map" className={`${isFabExpanded ? 'w-4 h-4' : 'w-5 h-5'} text-white`}></i>
+                
+                <button 
+                    onClick={() => { setIsSocialOpen(!isSocialOpen); setIsEngineOpen(false); }}
+                    className={`w-14 h-14 shadow-xl flex items-center justify-center transition-all duration-300 ${isSocialOpen ? 'bg-white text-slate-900 rounded-2xl rotate-90' : 'bg-slate-900 text-white rounded-full'}`}
+                >
+                    {isSocialOpen ? <i data-lucide="x" className="w-6 h-6"></i> : <i data-lucide="share-2" className="w-6 h-6"></i>}
+                </button>
             </div>
 
-            <div className={`flex flex-col items-start transition-all duration-500 ease-in-out ${
-                isFabExpanded ? 'ml-3 opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'
-            }`}>
-                <span className="text-[10px] font-black uppercase tracking-tighter leading-none whitespace-nowrap">Adventure Engine</span>
-                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-1 whitespace-nowrap">Plan Your Trip</span>
+            {/* HUB 2: ENGINE HUB (Blinking Main Button) */}
+            <div className="flex flex-col items-end gap-3">
+                <div className={`flex flex-col gap-3 transition-all duration-500 ${
+                    isEngineOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-90 pointer-events-none'
+                }`}>
+                    <button onClick={() => { setisAddOpen(true); setIsEngineOpen(false); }} className="flex items-center gap-3 bg-white text-slate-900 px-5 py-3 rounded-2xl shadow-xl border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all">
+                        <span className="font-black uppercase text-[10px] tracking-widest">Add Location</span>
+                        <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white"><i data-lucide="plus" className="w-4 h-4"></i></div>
+                    </button>
+                    <button onClick={() => { setIsPlannerOpen(true); setIsEngineOpen(false); }} className="flex items-center gap-3 bg-white text-slate-900 px-5 py-3 rounded-2xl shadow-xl border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all">
+                        <span className="font-black uppercase text-[10px] tracking-widest">Plan Route</span>
+                        <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white"><i data-lucide="map" className="w-4 h-4"></i></div>
+                    </button>
+                </div>
+
+                <div className="relative">
+                    {/* Pulsing Aura */}
+                    {!isEngineOpen && <div className="absolute inset-0 bg-slate-900 rounded-full animate-ping opacity-25"></div>}
+                    
+                    <button 
+                        onClick={() => { setIsEngineOpen(!isEngineOpen); setIsSocialOpen(false); }}
+                        className={`relative w-16 h-16 shadow-[0_20px_50px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-500 ${
+                            isEngineOpen ? 'bg-white text-slate-900 rounded-2xl rotate-90' : 'bg-slate-900 text-white rounded-full'
+                        }`}
+                    >
+                        {isEngineOpen ? (
+                            <i data-lucide="x" className="w-6 h-6 text-red-500"></i>
+                        ) : (
+                            <div className="flex flex-col items-center pointer-events-none">
+                                <i data-lucide="zap" className="w-6 h-6 text-yellow-400 fill-yellow-400"></i>
+                                <span className="text-[7px] font-black uppercase mt-1">Engine</span>
+                            </div>
+                        )}
+                    </button>
+                </div>
             </div>
-        </button>
-    </div>
+        </div>
+    )}
 </div>
-                    </header>
+
+
+</header>
 
                     {/* Dynamic visibility based on isFilterOpen state */}
 <div className={`${isFilterOpen ? 'block' : 'hidden'} md:block bg-white p-5 mx-4 md:mx-10 rounded-3xl shadow-xl border border-slate-100 mb-6`}>
