@@ -30,13 +30,14 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     
-    <script>
+   <script>
     (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-        key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs", v: "weekly"
+        key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs", 
+        v: "weekly",
+        libraries: ["places"] // CRITICAL: This was missing
     });
 </script>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs&libraries=places"></script>
-
+    
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>    
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
@@ -532,83 +533,63 @@ const getDeviceType = () => {
 };
 
 
+
 useEffect(() => {
     if (isAddOpen) {
-        const initTimer = setTimeout(() => {
-            const input = document.getElementById('location-search');
-            if (!input) return;
+        const initAutocomplete = async () => {
+            try {
+                // This matches the dynamic loader's pattern
+                const { Autocomplete } = await google.maps.importLibrary("places");
+                
+                const input = document.getElementById('location-search');
+                if (!input) return;
 
-            // Initialize Google Autocomplete
-            autocompleteRef.current = new google.maps.places.Autocomplete(input, {
-                fields: ["address_components", "geometry", "name", "url"],
-                componentRestrictions: { country: "lk" }
-            });
+                autocompleteRef.current = new Autocomplete(input, {
+                    fields: ["address_components", "geometry", "name", "url"],
+                    componentRestrictions: { country: "lk" }
+                });
 
-            autocompleteRef.current.addListener("place_changed", () => {
-                const place = autocompleteRef.current.getPlace();
-                if (!place.geometry) return;
+                autocompleteRef.current.addListener("place_changed", () => {
+                    const place = autocompleteRef.current.getPlace();
+                    if (!place.geometry) return;
 
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
-                const districtName = place.address_components?.find(c => 
-                    c.types.includes("administrative_area_level_2")
-                )?.long_name || '';
+                    const lat = place.geometry.location.lat();
+                    const lng = place.geometry.location.lng();
+                    const districtName = place.address_components?.find(c => 
+                        c.types.includes("administrative_area_level_2")
+                    )?.long_name || '';
 
-                // Silently update state with fetched data
-                setFormData(prev => ({
-                    ...prev,
-                    place_name: place.name,
-                    latitude: lat,
-                    longitude: lng,
-                    map_url: place.url,
-                    district: districtName
-                }));
+                    setFormData(prev => ({
+                        ...prev,
+                        place_name: place.name,
+                        latitude: lat,
+                        longitude: lng,
+                        map_url: place.url,
+                        district: districtName
+                    }));
+                });
+            } catch (err) {
+                console.error("Google Maps Places library failed to load:", err);
+            }
+        };
 
-                // Update the preview map if it exists
-                if (addMapRef.current) {
-                    addMapRef.current.setView([lat, lng], 14);
-                    // Clear existing markers on the preview map first if needed
-                    L.marker([lat, lng]).addTo(addMapRef.current);
-                }
-            });
-        }, 300);
-
-        return () => clearTimeout(initTimer);
+        // Delay slightly to ensure the modal's DOM element #location-search exists
+        const timer = setTimeout(initAutocomplete, 500);
+        return () => clearTimeout(timer);
     }
 }, [isAddOpen]);
 
-// 2. Submission Handler with Duplicate Check & Admin Approval
 const handleAddPlace = async (e) => {
     e.preventDefault();
 
-    // Ensure location was actually selected
-    if (!formData.latitude || !formData.longitude) {
-        alert("Please select a valid location from the search suggestions.");
+    // Prevent submission if the user didn't pick from the Google dropdown
+    if (!formData.latitude) {
+        alert("Please select a location from the search suggestions dropdown.");
         return;
     }
 
-    // A. Data Normalization for Validation
-    const normalizedName = formData.place_name.trim().toLowerCase();
-    const latFixed = parseFloat(formData.latitude).toFixed(4);
-    const lngFixed = parseFloat(formData.longitude).toFixed(4);
-
-    // B. Duplicate Validation (Check against existing public places)
-    const isDuplicate = places.some(p => {
-        const nameMatch = p.place_name.toLowerCase() === normalizedName;
-        const coordMatch = parseFloat(p.latitude).toFixed(4) === latFixed && 
-                           parseFloat(p.longitude).toFixed(4) === lngFixed;
-        
-        return nameMatch || coordMatch;
-    });
-
-    if (isDuplicate) {
-        alert("Verification Failed: This location or these coordinates already exist in the journal.");
-        return;
-    }
-
-    // C. Submit to 'pending_approvals' table
     try {
-        const { data, error } = await supabaseClient
+        const { error } = await supabaseClient
             .from('pending_approvals') 
             .insert([{
                 ...formData,
@@ -621,15 +602,14 @@ const handleAddPlace = async (e) => {
         alert("Success! Your suggestion has been sent to the Admin for approval.");
         setisAddOpen(false);
         
-        // Reset form
+        // Reset local form state
         setFormData({
             place_name: '', district: '', latitude: '', longitude: '',
             map_url: '', image_url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b',
-            status: 'backlog', category: 'Waterfall'
+            status: 'pending', category: 'Waterfall'
         });
 
     } catch (err) {
-        console.error("Submission error:", err);
         alert("Error sending request: " + err.message);
     }
 };
