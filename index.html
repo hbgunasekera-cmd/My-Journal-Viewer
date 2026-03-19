@@ -807,14 +807,14 @@ const clearSelectedRoute = () => {
         {isFilterOpen ? 'Close' : 'Filters'}
     </button>
 
-    {/* --- DUAL HUB SYSTEM --- */}
+    {/* --- CONSOLIDATED DUAL HUB SYSTEM --- */}
     {/* Logic: Hide hubs if any full-screen modal/form is active */}
     {!isAddOpen && !isPlannerOpen && (
-        <div className="fixed bottom-6 right-6 z-[4000] flex flex-col items-end gap-6">
+        <div className="fixed bottom-6 right-6 z-[4000] flex flex-row items-end gap-4">
 
-            {/* HUB 1: SOCIAL HUB (Facebook, TikTok) */}
-            <div className="flex flex-col items-end gap-3">
-                <div className={`flex items-center gap-2 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-2xl border border-slate-200 transition-all duration-500 ${
+            {/* HUB 1: SOCIAL HUB */}
+            <div className="flex flex-col items-center gap-3">
+                <div className={`flex flex-row items-center gap-2 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-2xl border border-slate-200 transition-all duration-500 ${
                     isSocialOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-90 pointer-events-none'
                 }`}>
                     <a href="https://web.facebook.com/profile.php?id=61571059524746" target="_blank" className="p-3 bg-blue-600 text-white rounded-xl hover:scale-110 transition-transform">
@@ -833,28 +833,26 @@ const clearSelectedRoute = () => {
                 </button>
             </div>
 
-            {/* HUB 2: ENGINE HUB (Blinking Main Button) */}
-            <div className="flex flex-col items-end gap-3">
+            {/* HUB 2: ENGINE HUB */}
+            <div className="flex flex-col items-center gap-3">
                 <div className={`flex flex-col gap-3 transition-all duration-500 ${
                     isEngineOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-90 pointer-events-none'
                 }`}>
-                    <button onClick={() => { setisAddOpen(true); setIsEngineOpen(false); }} className="flex items-center gap-3 bg-white text-slate-900 px-5 py-3 rounded-2xl shadow-xl border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all">
-                        <span className="font-black uppercase text-[10px] tracking-widest">Add Location</span>
-                        <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white"><i data-lucide="plus" className="w-4 h-4"></i></div>
+                    <button onClick={() => { setisAddOpen(true); setIsEngineOpen(false); }} className="flex items-center gap-3 bg-white text-slate-900 px-4 py-3 rounded-2xl shadow-xl border border-slate-100 whitespace-nowrap">
+                        <span className="font-black uppercase text-[9px] tracking-widest">Add Location</span>
+                        <div className="w-7 h-7 bg-indigo-600 rounded-full flex items-center justify-center text-white"><i data-lucide="plus" className="w-3.5 h-3.5"></i></div>
                     </button>
-                    <button onClick={() => { setIsPlannerOpen(true); setIsEngineOpen(false); }} className="flex items-center gap-3 bg-white text-slate-900 px-5 py-3 rounded-2xl shadow-xl border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all">
-                        <span className="font-black uppercase text-[10px] tracking-widest">Plan Route</span>
-                        <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white"><i data-lucide="map" className="w-4 h-4"></i></div>
+                    <button onClick={() => { setIsPlannerOpen(true); setIsEngineOpen(false); }} className="flex items-center gap-3 bg-white text-slate-900 px-4 py-3 rounded-2xl shadow-xl border border-slate-100 whitespace-nowrap">
+                        <span className="font-black uppercase text-[9px] tracking-widest">Plan Route</span>
+                        <div className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center text-white"><i data-lucide="map" className="w-3.5 h-3.5"></i></div>
                     </button>
                 </div>
 
                 <div className="relative">
-                    {/* Pulsing Aura */}
                     {!isEngineOpen && <div className="absolute inset-0 bg-slate-900 rounded-full animate-ping opacity-25"></div>}
-                    
                     <button 
                         onClick={() => { setIsEngineOpen(!isEngineOpen); setIsSocialOpen(false); }}
-                        className={`relative w-16 h-16 shadow-[0_20px_50px_rgba(0,0,0,0.4)] flex items-center justify-center transition-all duration-500 ${
+                        className={`relative w-16 h-16 shadow-2xl flex items-center justify-center transition-all duration-500 ${
                             isEngineOpen ? 'bg-white text-slate-900 rounded-2xl rotate-90' : 'bg-slate-900 text-white rounded-full'
                         }`}
                     >
