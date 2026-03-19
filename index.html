@@ -200,6 +200,7 @@ const [places, setPlaces] = useState([]);
     const autocompleteRef = useRef(null);;
     const [isEngineOpen, setIsEngineOpen] = React.useState(false);
     const [isSocialOpen, setIsSocialOpen] = React.useState(false);
+    const [isPrivacyOpen, setIsPrivacyOpen] = React.useState(false);
     const [formData, setFormData] = useState({
         place_name: '',
         district: '',
@@ -765,7 +766,62 @@ const displayPlaces = React.useMemo(() => {
     });
 }, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
 
+const PrivacyModal = ({ isOpen, onClose }) => {
+    if (!isOpen) return null;
 
+    return (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-3xl shadow-2xl p-8 relative">
+                <button 
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                    <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <h2 className="text-2xl font-black text-slate-900 mb-6 uppercase tracking-tight">Privacy Policy</h2>
+                
+                <div className="space-y-6 text-slate-600 text-sm leading-relaxed">
+                    <section>
+                        <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-2">Introduction</h3>
+                        <p>Welcome to <strong>My Journal - Viewer</strong>. We value your privacy and are committed to protecting the information you share while using our adventure planning platform.</p>
+                    </section>
+
+                    <section>
+                        <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-2">Information Collection</h3>
+                        <p>To provide accurate distance calculations and travel routing, we may access your device's approximate location. We also collect usage data (IP addresses and browser types) to optimize our performance on devices like iPhones and desktop browsers.</p>
+                    </section>
+
+                    <section>
+                        <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-2">Google AdSense & Cookies</h3>
+                        <p>This site uses Google AdSense to display advertisements. Google uses cookies (such as the DART cookie) to serve ads based on your visit to this site and other sites on the Internet. You may opt out of personalized advertising by visiting Google's Ad Settings.</p>
+                    </section>
+
+                    <section>
+                        <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-2">Third-Party Services</h3>
+                        <p>We use <strong>Supabase</strong> for secure data storage and <strong>Vercel</strong> for hosting. These services may collect logs necessary for technical stability and security.</p>
+                    </section>
+
+                    <section>
+                        <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest mb-2">Contact</h3>
+                        <p>For any questions regarding this policy or our data practices, please reach out via the official "My Journal" social media channels.</p>
+                    </section>
+                </div>
+                
+                <div className="mt-8 pt-6 border-t border-slate-100">
+                    <button 
+                        onClick={onClose}
+                        className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold uppercase text-[10px] tracking-widest hover:bg-indigo-600 transition-all"
+                    >
+                        I Understand
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const clearSelectedRoute = () => {
     if (window.confirm("Are you sure you want to clear all selected locations?")) {
@@ -1039,13 +1095,27 @@ const clearSelectedRoute = () => {
                         Read
                     </button>
                 )}
+              </div>
+             </div>
             </div>
-        </div>
-    </div>
-))}
-                            
-                        </div>
-                    </div>
+           ))}
+         </div> 
+                        
+                        
+          {/* ADD THE FOOTER HERE - Inside the scrollable area */}
+            <footer className="py-10 text-center border-t border-slate-100 mt-10">
+                <button 
+                    onClick={() => setIsPrivacyOpen(true)}
+                    className="text-[10px] font-bold text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors"
+                >
+                    Privacy Policy & Terms
+                </button>
+                <p className="text-[9px] text-slate-300 uppercase mt-2 font-medium">
+                    © {new Date().getFullYear()} My Journal by Hasitha Gunasekera
+                </p>
+            </footer>
+          </div>
+                    
 
                     {isArticleOpen && ViewingArticle && (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -1290,6 +1360,8 @@ const clearSelectedRoute = () => {
                                         <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
                                     </button>
                                 </div>
+                                
+                                
                             );
                         });
                     })()}
@@ -1381,12 +1453,15 @@ const clearSelectedRoute = () => {
     </div>
 )}
 
-                </div>
-            );
-        }
+<PrivacyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
+
+        </div>
+      );
+     }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
+
 </html>
