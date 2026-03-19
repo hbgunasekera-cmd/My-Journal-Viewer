@@ -165,8 +165,8 @@ const [places, setPlaces] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [isArticleOpen, setIsArticleOpen] = useState(false);
-    const [viewingArticle, setViewingArticle] = useState(null);
+    const [isArticleOpen, setisArticleOpen] = useState(false);
+    const [ViewingArticle, setViewingArticle] = useState(null);
     const [isPlannerOpen, setIsPlannerOpen] = useState(false);
     const [selectedRoute, setSelectedRoute] = useState([]);
     const [userCoords, setUserCoords] = useState(null);
@@ -174,6 +174,7 @@ const [places, setPlaces] = useState([]);
     const [filterTag, setFilterTag] = useState('All');
     const [likes, setLikes] = useState({});
     const [comments, setComments] = useState({}); 
+    const [NewCommentText, setNewCommentText] = useState('');
     const [sortBy, setSortBy] = useState('recent');
     const [routeDistance, setRouteDistance] = useState(0); 
     const [isAddOpen, setisAddOpen] = useState(false);
@@ -1049,7 +1050,7 @@ const clearSelectedRoute = () => {
                 
                 {place.ai_article && (
                     <button 
-                        onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} 
+                        onClick={() => { setViewingArticle(place); setisArticleOpen(true); }} 
                         className="py-2.5 rounded-xl bg-emerald-600 text-white text-[8px] font-black uppercase hover:bg-emerald-700 active:scale-95 transition-all"
                     >
                         Read
@@ -1063,17 +1064,17 @@ const clearSelectedRoute = () => {
                         </div>
                     </div>
 
-                    {isArticleOpen && viewingArticle && (
+                    {isArticleOpen && ViewingArticle && (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setIsArticleOpen(false)}></div>
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setisArticleOpen(false)}></div>
         <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            <img src={viewingArticle.cover_photo_url} className="h-48 w-full object-cover" />
+            <img src={ViewingArticle.cover_photo_url} className="h-48 w-full object-cover" />
             <div className="p-8 overflow-y-auto scrollable-list">
                 <div className="flex justify-between items-start mb-2">
-                    <h2 className="text-2xl font-black uppercase tracking-tighter">{auditLocationName(viewingArticle.place_name)}</h2>
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">{auditLocationName(ViewingArticle.place_name)}</h2>
                  
                     <button 
-                        onClick={() => { window.open(viewingArticle.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${viewingArticle.latitude},${viewingArticle.longitude}`, '_blank'); }}
+                        onClick={() => { window.open(ViewingArticle.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${ViewingArticle.latitude},${ViewingArticle.longitude}`, '_blank'); }}
                         className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
                     >
                         <i data-lucide="map-pin" className="w-4 h-4 text-slate-600"></i>
@@ -1082,26 +1083,26 @@ const clearSelectedRoute = () => {
 
                 <div className="flex items-center justify-between mb-6">
                     <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                        {viewingArticle.category}
+                        {ViewingArticle.category}
                     </span>
                     <button 
-                        onClick={() => handleLike(viewingArticle.id)} 
+                        onClick={() => handleLike(ViewingArticle.id)} 
                         className="flex items-center gap-2 group transition-all bg-slate-50 hover:bg-rose-50 px-4 py-2 rounded-2xl border border-slate-100"
                     >
-                        <i data-lucide="heart" className={`w-4 h-4 ${likes[viewingArticle.id] ? 'text-rose-500 fill-rose-500' : 'text-slate-300'}`}></i>
-                        <span className="text-xs font-black text-slate-900">{likes[viewingArticle.id] || 0}</span>
+                        <i data-lucide="heart" className={`w-4 h-4 ${likes[ViewingArticle.id] ? 'text-rose-500 fill-rose-500' : 'text-slate-300'}`}></i>
+                        <span className="text-xs font-black text-slate-900">{likes[ViewingArticle.id] || 0}</span>
                     </button>
                 </div>
 
-                <p className="text-slate-600 leading-relaxed mb-10">{viewingArticle.ai_article}</p>
+                <p className="text-slate-600 leading-relaxed mb-10">{ViewingArticle.ai_article}</p>
 
                 <div className="border-t border-slate-100 pt-8">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">
-                        Discussion ({comments[viewingArticle.id]?.length || 0})
+                        Discussion ({comments[ViewingArticle.id]?.length || 0})
                     </h4>
                     
                     <div className="space-y-4 mb-6">
-                        {comments[viewingArticle.id]?.map((c, i) => (
+                        {comments[ViewingArticle.id]?.map((c, i) => (
                             <div key={i} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <p className="text-xs text-slate-700 font-semibold mb-2">{c.comment_text}</p>
                                 <div className="flex justify-between items-center">
@@ -1138,27 +1139,27 @@ const clearSelectedRoute = () => {
                     <div className="relative">
                         <input 
                             type="text" 
-                            value={newCommentText}
+                            value={NewCommentText}
                             onChange={(e) => setNewCommentText(e.target.value)}
                             placeholder="Share your thoughts..." 
                             className="w-full bg-slate-100 border-2 border-transparent focus:border-slate-900 focus:bg-white rounded-2xl px-5 py-4 text-xs font-bold transition-all outline-none pr-12"
                             onKeyDown={async (e) => {
-                                if (e.key === 'Enter' && newCommentText.trim()) {
-                                    const text = newCommentText;
+                                if (e.key === 'Enter' && NewCommentText.trim()) {
+                                    const text = NewCommentText;
                                     setNewCommentText('');
-                                    await submitComment(viewingArticle.id, text);
+                                    await submitComment(ViewingArticle.id, text);
                                 }
                             }}
                         />
                         <button 
-                            onClick={() => { if(newCommentText.trim()) submitComment(viewingArticle.id, newCommentText); setNewCommentText(''); }}
+                            onClick={() => { if(NewCommentText.trim()) submitComment(ViewingArticle.id, NewCommentText); setNewCommentText(''); }}
                             className="absolute right-4 top-1/2 -translate-y-1/2"
                         >
                             <i data-lucide="send" className="w-4 h-4 text-slate-400"></i>
                         </button>
                     </div>
                 </div>
-                <button onClick={() => setIsArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Back to Log</button>
+                <button onClick={() => setisArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Back to Log</button>
             </div>
         </div>
     </div>
