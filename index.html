@@ -214,25 +214,32 @@ const [places, setPlaces] = useState([]);
  
 
             const initApp = async () => {
-                await fetchPlaces();
-                await fetchInteractions();
-                getUserLocation();
-                logVisit();
-            };
+    await fetchPlaces();
+    await fetchInteractions();
+    getUserLocation();
+    logVisit();
+};
             
             // --- 1. App Initialization ---
-useEffect(() => { 
-    initApp(); 
+            
+            useEffect(() => {
+    initApp();
 }, []);
 
+
+
 // --- 2. Centralized Icon Management ---
-// Consolidates 3 redundant effects into one. 
-// Triggers icons to render whenever a UI component mounts/unmounts or a modal opens.
 useEffect(() => { 
-    if (window.lucide) {
-        window.lucide.createIcons();
-    }
+    const timer = setTimeout(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }, 100); 
+    return () => clearTimeout(timer);
 }, [
+    displayPlaces, 
+    likes, 
+    comments,
     isArticleOpen, isFilterOpen, isPlannerOpen, 
     isSocialExpanded, isAddExpanded, isAddOpen, isFabExpanded
 ]);
@@ -1052,16 +1059,29 @@ const clearSelectedRoute = () => {
             </div>
 
             {/* Interactions */}
-            <div className="flex items-center gap-4 mb-4 px-1">
-                <button onClick={() => handleLike(place.id)} className="flex items-center gap-1.5 group transition-colors">
-                    <i data-lucide="heart" className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 group-hover:fill-rose-500"></i>
-                    <span className="text-[9px] font-black text-slate-400">{likes[place.id] || 0}</span>
-                </button>
-                <div className="flex items-center gap-1.5">
-                    <i data-lucide="message-square" className="w-3.5 h-3.5 text-slate-300"></i>
-                    <span className="text-[9px] font-black text-slate-400">{comments[place.id]?.length || 0}</span>
-                </div>
-            </div>
+           <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-50">
+    {/* Like Button */}
+    <button 
+        onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
+        className="flex items-center gap-1.5 group outline-none select-none"
+    >
+        <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
+            <i data-lucide="heart" className={`w-4 h-4 ${likes[place.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`}></i>
+        </div>
+        <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
+    </button>
+
+    {/* Comment Button */}
+    <button 
+        onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setisArticleOpen(true); }}
+        className="flex items-center gap-1.5 group outline-none select-none"
+    >
+        <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
+            <i data-lucide="message-circle" className="w-4 h-4 text-slate-400"></i>
+        </div>
+        <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
+    </button>
+</div>
 
             {/* Action Buttons */}
             <div className="grid grid-cols-3 gap-2 mt-auto">
