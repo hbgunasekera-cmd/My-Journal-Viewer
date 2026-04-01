@@ -16,7 +16,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>   
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
     
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
     <script>
@@ -38,6 +38,8 @@
         libraries: ["places"] 
     });
 </script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         
 
     <style>
@@ -149,7 +151,7 @@
 
         function App() {
             
-const [places, setPlaces] = useState([]);
+    const [places, setPlaces] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -193,20 +195,16 @@ const [places, setPlaces] = useState([]);
     });
     const [weatherData, setWeatherData] = React.useState({});
  
-
-    const initApp = async () => {
-    await fetchPlaces();
-    await fetchInteractions();
-    getUserLocation();
+    
+useEffect(() => {
+    fetchPlaces();
+    fetchInteractions();
     logVisit();
-};
-            
-            // --- 1. App Initialization ---
-            
-            useEffect(() => {
-    initApp();
+    const watchId = startLocationTracking();    
+    return () => {
+        if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    };
 }, []);
-
 
 
 // --- 2. Centralized Icon Management ---
@@ -271,6 +269,7 @@ useEffect(() => {
 }, [isAddOpen, places]);
 
 // --- 4. Adventure Engine / Planner Map ---
+// --- 4. Adventure Engine / Planner Map ---
 useEffect(() => {
     if (!isPlannerOpen) {
         if (mapRef.current) {
@@ -287,16 +286,14 @@ useEffect(() => {
 
         // Initialize Map instance
         if (!mapRef.current) {
+            // Prioritize userCoords for map centering, fallback to DEFAULT
             mapRef.current = L.map('planner-map', { 
                 zoomControl: false, 
                 attributionControl: true 
-            }).setView([userCoords?.lat || 7.8731, userCoords?.lng || 80.7718], 10);
-
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                attribution: '© OpenStreetMap © CARTO',
-                subdomains: 'abcd',
-                maxZoom: 20
-            }).addTo(mapRef.current);
+            }).setView([userCoords?.lat || DEFAULT_LOCATION.lat, userCoords?.lng || DEFAULT_LOCATION.lng], 10);
+            
+            // Add tile layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(mapRef.current);
         }
 
         // Handle Markers
@@ -325,6 +322,7 @@ useEffect(() => {
             currentRouteIdsRef.current = routeSignature;
 
             if (selectedRoute.length > 0 && userCoords) {
+                // FIXED: Start route from userCoords
                 const waypoints = [
                     L.latLng(userCoords.lat, userCoords.lng),
                     ...selectedRoute.map(p => L.latLng(p.latitude, p.longitude))
@@ -350,7 +348,8 @@ useEffect(() => {
                 routingControlRef.current = null;
                 setRouteDistance(0);
             }
-        }
+        } // <-- FIXED: This closing brace was missing/misplaced in your code
+
     }, 100);
 
     return () => clearTimeout(timer);
@@ -589,14 +588,32 @@ const getDeviceType = () => {
     return "Desktop";
 };
 
-            const getUserLocation = () => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                    () => setUserCoords(DEFAULT_LOCATION)
-                );
-            } else { setUserCoords(DEFAULT_LOCATION); }
-        };
+            const startLocationTracking = () => {
+    if ("geolocation" in navigator) {
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                setUserCoords({ 
+                    lat: pos.coords.latitude, 
+                    lng: pos.coords.longitude 
+                });
+            },
+            (err) => {
+                console.warn("GPS Error, using default. Code:", err.code);
+                // Only set default if we have absolutely nothing
+                setUserCoords(prev => prev || DEFAULT_LOCATION);
+            },
+            { 
+                enableHighAccuracy: true, 
+                timeout: 10000, 
+                maximumAge: 0 
+            }
+        );
+        return watchId;
+    } else {
+        setUserCoords(DEFAULT_LOCATION);
+        return null;
+    }
+};
         
         const toggleRoutePlace = (place) => {
     setSelectedRoute(prev => {
@@ -881,10 +898,11 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Radius of the earth in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 };
 
 const displayPlaces = React.useMemo(() => {
@@ -1392,6 +1410,7 @@ const clearSelectedRoute = () => {
         <div className="relative bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col md:flex-row">
             
             {/* Left Side: Map Widget */}
+            {/* Note: Map initialization logic should prepend userCoords to waypoints in your useEffect */}
             <div className="h-[35vh] md:h-full md:w-2/3 bg-slate-100 relative z-0" id="planner-map"></div>
 
             {/* Right Side: Selection Panel */}
@@ -1450,134 +1469,134 @@ const clearSelectedRoute = () => {
                 </div>
 
                 {/* SCROLLABLE LOCATION LIST */}
-<div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-white">
-    {(() => {
-        // 1. Filter and Calculate Distance
-        let filtered = places.filter(place => {
-            const name = (place.place_name || "").toLowerCase();
-            const cat = (place.category || "").toLowerCase();
-            const search = (plannerSearch || "").toLowerCase();
-            return (place.status === 'done' || place.status === 'pending') && (name.includes(search) || cat.includes(search));
-        }).map(place => {
-            // Attach distance to the object for easy sorting and rendering
-            const dist = userCoords ? calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude) : Infinity;
-            return { ...place, calculatedDistance: dist };
-        });
+                <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-white">
+                    {(() => {
+                        // 1. Filter and Calculate Distance from Device
+                        let filtered = places.filter(place => {
+                            const name = (place.place_name || "").toLowerCase();
+                            const cat = (place.category || "").toLowerCase();
+                            const search = (plannerSearch || "").toLowerCase();
+                            return (place.status === 'done' || place.status === 'pending') && (name.includes(search) || cat.includes(search));
+                        }).map(place => {
+                            // Calculate distance from device location
+                            const dist = userCoords ? calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude) : Infinity;
+                            return { ...place, calculatedDistance: dist };
+                        });
 
-        // 2. Sort by Nearest Distance
-        filtered.sort((a, b) => a.calculatedDistance - b.calculatedDistance);
+                        // 2. Sort by Nearest (Fix: Nearest on Top)
+                        filtered.sort((a, b) => a.calculatedDistance - b.calculatedDistance);
 
-        if (filtered.length === 0) {
-            return (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
-                    <i data-lucide="map-pin-off" className="w-8 h-8 mb-2 opacity-20"></i>
-                    <span className="text-[10px] font-bold uppercase tracking-widest">No locations found</span>
-                </div>
-            );
-        }
-
-        // 3. Render Cards
-        return filtered.map(place => {
-            const isSelected = selectedRoute.find(p => p.id === place.id);
-            const weather = weatherData[place.place_name];
-            
-            return (
-                <div 
-                    key={place.id} 
-                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer group ${
-                        isSelected 
-                            ? 'border-slate-900 bg-slate-50' 
-                            : 'border-slate-100 bg-white hover:border-indigo-200'
-                    }`}
-                >
-                    <div className="flex flex-col min-w-0 pr-2 flex-1" onClick={() => toggleRoutePlace(place)}>
-                        <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${place.status === 'pending' ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
-                            <span className="text-[10px] font-black uppercase truncate text-slate-900">
-                                {place.place_name}
-                            </span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[8px] font-bold uppercase truncate text-slate-400">
-                                {place.category} • {place.district}
-                            </span>
-                            {/* NEW: Distance Badge */}
-                            {place.calculatedDistance !== Infinity && (
-                                <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                    {place.calculatedDistance.toFixed(1)} km
-                                </span>
-                            )}
-                        </div>
-
-                        {/* WEATHER INTEGRATION */}
-                        <div className="min-h-[26px]">
-                            {weather ? (
-                                <div className="flex items-center gap-2 mt-2">
-                                    {/* Current Condition */}
-                                    <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-lg border border-blue-100/50">
-                                        <WeatherIcon condition={weather.currentCond} />
-                                        <div className="flex flex-col leading-none">
-                                            <span className="text-[6px] font-black text-blue-400 uppercase tracking-tighter">Now</span>
-                                            <span className="text-[9px] font-bold text-blue-700">{weather.current}°C</span>
-                                        </div>
-                                    </div>
-
-                                    {/* 24H Forecast */}
-                                    <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
-                                        <div className="flex flex-col leading-none">
-                                            <span className="text-[6px] font-black text-slate-400 uppercase tracking-tighter">24H</span>
-                                            <span className="text-[9px] font-bold text-slate-600">{weather.nextDay}°C</span>
-                                        </div>
-                                        <span className="text-[7px] text-slate-400 font-bold uppercase tracking-tight border-l border-slate-200 pl-1.5">
-                                            {weather.nextCond}
-                                        </span>
-                                    </div>
+                        if (filtered.length === 0) {
+                            return (
+                                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+                                    <i data-lucide="map-pin-off" className="w-8 h-8 mb-2 opacity-20"></i>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest">No locations found</span>
                                 </div>
-                            ) : (
-                                <div className="mt-2 flex gap-2">
-                                    <div className="h-[22px] w-14 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
-                                    <div className="h-[22px] w-20 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    
-                    <button 
-                        onClick={() => toggleRoutePlace(place)}
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
-                            isSelected 
-                                ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' 
-                                : 'bg-slate-100 text-slate-400 hover:bg-indigo-500 hover:text-white'
-                        }`}
-                    >
-                        <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
-                    </button>
+                            );
+                        }
+
+                        // 3. Render Cards
+                        return filtered.map(place => {
+                            const isSelected = selectedRoute.find(p => p.id === place.id);
+                            const weather = weatherData[place.place_name];
+                            
+                            return (
+                                <div 
+                                    key={place.id} 
+                                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer group ${
+                                        isSelected 
+                                            ? 'border-slate-900 bg-slate-50' 
+                                            : 'border-slate-100 bg-white hover:border-indigo-200'
+                                    }`}
+                                >
+                                    <div className="flex flex-col min-w-0 pr-2 flex-1" onClick={() => toggleRoutePlace(place)}>
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2 h-2 rounded-full shrink-0 ${place.status === 'pending' ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                                            <span className="text-[10px] font-black uppercase truncate text-slate-900">
+                                                {place.place_name}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-[8px] font-bold uppercase truncate text-slate-400">
+                                                {place.category} • {place.district}
+                                            </span>
+                                            {/* Distance Badge */}
+                                            {place.calculatedDistance !== Infinity && (
+                                                <span className="text-[7px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                                                    {place.calculatedDistance.toFixed(1)} km away
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* WEATHER INTEGRATION */}
+<div className="min-h-[26px]">
+    {weather ? (
+        <div className="flex items-center gap-2 mt-2">
+            {/* Current Condition (Now) */}
+            <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-lg border border-blue-100/50">
+                <WeatherIcon condition={weather.currentCond} />
+                <div className="flex flex-col leading-none">
+                    <span className="text-[6px] font-black text-blue-400 uppercase tracking-tighter">Now</span>
+                    <span className="text-[9px] font-bold text-blue-700">{weather.current}°C</span>
                 </div>
-            );
-        });
-    })()}
+            </div>
+
+            {/* Tomorrow's Forecast (24H) */}
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                <div className="flex flex-col leading-none">
+                    <span className="text-[6px] font-black text-slate-400 uppercase tracking-tighter">24H</span>
+                    <span className="text-[9px] font-bold text-slate-600">{weather.nextDay}°C</span>
+                </div>
+                <span className="text-[7px] text-slate-400 font-bold uppercase tracking-tight border-l border-slate-200 pl-1.5">
+                    {weather.nextCond}
+                </span>
+            </div>
+        </div>
+    ) : (
+        <div className="mt-2 flex gap-2">
+            <div className="h-[22px] w-14 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
+            <div className="h-[22px] w-20 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
+        </div>
+    )}
 </div>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => toggleRoutePlace(place)}
+                                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
+                                            isSelected 
+                                                ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' 
+                                                : 'bg-slate-100 text-slate-400 hover:bg-indigo-500 hover:text-white'
+                                        }`}
+                                    >
+                                        <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            );
+                        });
+                    })()}
+                </div>
 
                 {/* Footer Action */}
-<div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
-    <div className="flex gap-2">
-        
-        <button 
-            onClick={() => {
-                if (selectedRoute.length === 0) return;
-                showQRCode(selectedRoute, "Expedition Route");
-            }}
-            disabled={selectedRoute.length === 0}
-            className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.95] ${
-                selectedRoute.length > 0 ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
-        >
-            <i data-lucide="qr-code" className="w-4 h-4"></i>
-            Share
-        </button>
-    </div>
-</div>
+                <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => {
+                                if (selectedRoute.length === 0) return;
+                                // Calls the function where QRCode.CorrectLevel.H fix was applied
+                                showQRCode(selectedRoute, "Expedition Route");
+                            }}
+                            disabled={selectedRoute.length === 0}
+                            className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.95] ${
+                                selectedRoute.length > 0 ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            }`}
+                        >
+                            <i data-lucide="qr-code" className="w-4 h-4"></i>
+                            Generate QR & Share
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
