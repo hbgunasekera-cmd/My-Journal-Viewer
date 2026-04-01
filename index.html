@@ -197,12 +197,17 @@
  
     
 useEffect(() => {
+    // Start tracking immediately
+    const watchId = getUserLocation();
+    
+    // Other initializations
     fetchPlaces();
     fetchInteractions();
     logVisit();
-    const watchId = startLocationTracking();    
+
+    // Cleanup: Stop GPS when user closes the tab
     return () => {
-        if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+        if (watchId) navigator.geolocation.clearWatch(watchId);
     };
 }, []);
 
@@ -268,7 +273,6 @@ useEffect(() => {
     };
 }, [isAddOpen, places]);
 
-// --- 4. Adventure Engine / Planner Map ---
 // --- 4. Adventure Engine / Planner Map ---
 useEffect(() => {
     if (!isPlannerOpen) {
@@ -588,31 +592,30 @@ const getDeviceType = () => {
     return "Desktop";
 };
 
-            const startLocationTracking = () => {
-    if ("geolocation" in navigator) {
-        const watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                setUserCoords({ 
-                    lat: pos.coords.latitude, 
-                    lng: pos.coords.longitude 
-                });
-            },
-            (err) => {
-                console.warn("GPS Error, using default. Code:", err.code);
-                // Only set default if we have absolutely nothing
-                setUserCoords(prev => prev || DEFAULT_LOCATION);
-            },
-            { 
-                enableHighAccuracy: true, 
-                timeout: 10000, 
-                maximumAge: 0 
-            }
-        );
-        return watchId;
-    } else {
+      const getUserLocation = () => {
+    if (!navigator.geolocation) {
         setUserCoords(DEFAULT_LOCATION);
-        return null;
+        return;
     }
+
+    // High accuracy watcher - matches Testing.html
+    const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setUserCoords(newCoords);
+            console.log("GPS Updated:", newCoords);
+        },
+        (err) => {
+            console.warn("GPS Warning:", err.message);
+            if (!userCoords) setUserCoords(DEFAULT_LOCATION);
+        },
+        { 
+            enableHighAccuracy: true, // REQUIRED FOR ACCURACY
+            timeout: 10000, 
+            maximumAge: 0 
+        }
+    );
+    return watchId;
 };
         
         const toggleRoutePlace = (place) => {
@@ -906,25 +909,41 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const displayPlaces = React.useMemo(() => {
-    return places.filter(place => {
+    // 1. FILTERING LOGIC
+    const filtered = places.filter(place => {
         const matchesStatus = place.status === statusFilter;
         const matchesCategory = filterTag === 'All' || place.category === filterTag;
-        
         
         const name = (place.place_name || "").toLowerCase();
         const district = (place.district || "").toLowerCase();
         const search = (searchTerm || "").toLowerCase();
         
         const matchesSearch = name.includes(search) || district.includes(search);
+        
         return matchesStatus && matchesCategory && matchesSearch;
-    }).sort((a, b) => {
-        if (sortBy === 'recent') return b.id - a.id;
-        if (sortBy === 'distance' && userCoords) {
+    });
+
+    // 2. SORTING LOGIC (Refined for Accuracy)
+    return filtered.sort((a, b) => {
+        // Sort by ID (Newest First)
+        if (sortBy === 'recent') {
+            return b.id - a.id;
+        }
+
+        // Sort by Distance (Nearest First)
+        // Ensure userCoords is available before attempting calculation
+        if (sortBy === 'distance' && userCoords && userCoords.lat && userCoords.lng) {
             const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
             const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
+            
+            // Handle edge cases where distance might be NaN
+            if (isNaN(distA) || isNaN(distB)) return 0;
+            
             return distA - distB;
         }
-        return 0;
+
+        // Default: Sort by Place Name alphabetically if no other sort is active
+        return (a.place_name || "").localeCompare(b.place_name || "");
     });
 }, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
 
