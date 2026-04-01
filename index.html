@@ -16,6 +16,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>   
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
     <script>
@@ -222,8 +223,8 @@ useEffect(() => {
     comments,
     isArticleOpen, isFilterOpen, isPlannerOpen, 
     isSocialExpanded, isAddExpanded, isAddOpen, isFabExpanded,
-    weatherData,    // 🟢 ADD THIS: Triggers icons when weather loads
-    plannerSearch   // 🟢 ADD THIS: Triggers icons when searching in the modal
+    weatherData,    
+    plannerSearch  
 ]);
 
 // --- 3. Add Location Verification Map ---
@@ -247,7 +248,7 @@ useEffect(() => {
             attributionControl: false 
         }).setView([7.87, 80.77], 7);
 
-        // 🟢 FIX 1: Change to Voyager (Colored Map) instead of light_all
+        
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(addMapRef.current);
 
         // Draw existing places as small gray dots with tooltips
@@ -681,7 +682,7 @@ useEffect(() => {
         district: districtName
     }));
 
-    // 🟢 FIX 2: Plot the Yellow Dot
+    
     if (addMapRef.current) {
         addMapRef.current.setView([lat, lng], 14); // Zoom in on the new spot
         
@@ -721,7 +722,7 @@ const handleAddPlace = async (e) => {
         return;
     }
 
-    // 🟢 FIX 3: Duplicate Validation Logic
+    
     const normalizedName = formData.place_name.trim().toLowerCase();
     const latFixed = parseFloat(formData.latitude).toFixed(4);
     const lngFixed = parseFloat(formData.longitude).toFixed(4);
@@ -800,29 +801,77 @@ useEffect(() => {
 
 
 
-// Generate WhatsApp Share Link
-const shareToWhatsApp = () => {
-    if (selectedRoute.length === 0) return;
+// 1. CORRECTED URL GENERATOR
+// Uses the standard Google Maps direction format for multiple waypoints
+const generateGoogleMapsUrl = (points) => {
+    if (!points || points.length === 0) return "";
+    const baseUrl = "https://www.google.com/maps/dir/";
+    const stops = points.map(p => `${p.latitude},${p.longitude}`).join('/');
+    return `${baseUrl}${stops}`;
+};
 
-    const origin = userCoords ? `${userCoords.lat},${userCoords.lng}` : "";
-    const destination = `${selectedRoute[selectedRoute.length - 1].latitude},${selectedRoute[selectedRoute.length - 1].longitude}`;
-    
-    // Get intermediate stops (all selected places except the last one)
-    const waypoints = selectedRoute
-        .slice(0, -1)
-        .map(p => `${p.latitude},${p.longitude}`)
-        .join('|');
+// 2. CORRECTED QR MODAL
+const showQRCode = (points, name = "My Travel Route") => {
+    const universalUrl = generateGoogleMapsUrl(points);
+    if (!universalUrl) return;
 
-    // Build Google Maps URL
-    let gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
-    
-    if (waypoints) {
-        gmapsUrl += `&waypoints=${waypoints}`;
-    }
+    const existing = document.getElementById('qr-modal-overlay');
+    if (existing) existing.remove();
 
-    const message = `Check out my travel plan:\n\n${selectedRoute.map((p, i) => `${i + 1}. ${p.place_name}`).join('\n')}\n\nRoute: ${gmapsUrl}`;
+    const overlay = document.createElement('div');
+    overlay.id = "qr-modal-overlay";
+    overlay.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-6";
     
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    const modal = document.createElement('div');
+    modal.className = "bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full border border-slate-100";
+    
+    modal.onclick = (e) => e.stopPropagation();
+    overlay.onclick = () => overlay.remove();
+
+    modal.innerHTML = `
+        <div class="text-center">
+            <p class="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Scan to Navigate</p>
+            <h3 class="text-sm font-black uppercase text-slate-800 leading-tight mb-4 px-4 line-clamp-2">${name}</h3>
+        </div>
+        <div class="p-5 bg-slate-50 rounded-[2.5rem] border border-slate-100 shadow-inner">
+            <div id="qrcode-canvas"></div>
+        </div>
+        <div class="w-full space-y-3">
+            <button id="copy-link-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg active:scale-95">Copy Link</button>
+            <button id="whatsapp-modal-btn" class="w-full py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg active:scale-95">WhatsApp</button>
+            <button id="close-qr-btn" class="w-full py-3 text-slate-400 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:text-slate-600">Dismiss</button>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // FIXED INITIALIZATION
+    setTimeout(() => {
+        const qrContainer = document.getElementById("qrcode-canvas");
+        if (qrContainer) {
+            new QRCode(qrContainer, {
+                text: universalUrl,
+                width: 200,
+                height: 200,
+                colorDark: "#0f172a",
+                colorLight: "#f8fafc",
+                // CHANGED: QRCode.Level.H -> QRCode.CorrectLevel.H
+                correctLevel: QRCode.CorrectLevel.H 
+            });
+        }
+    }, 50);
+
+    // Button Logic remains the same
+    modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
+    modal.querySelector('#copy-link-btn').onclick = () => {
+        navigator.clipboard.writeText(universalUrl);
+        alert("Link copied!"); // Fallback if showToast state is not accessible
+    };
+    modal.querySelector('#whatsapp-modal-btn').onclick = () => {
+        const text = encodeURIComponent(`Check out my route: ${universalUrl}`);
+        window.open(`https://wa.me/?text=${text}`, '_blank');
+    };
 };
 
 
@@ -1511,20 +1560,24 @@ const clearSelectedRoute = () => {
 </div>
 
                 {/* Footer Action */}
-                <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
-                    <button 
-                        onClick={shareToWhatsApp}
-                        disabled={selectedRoute.length === 0}
-                        className={`w-full py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
-                            selectedRoute.length > 0 
-                                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700' 
-                                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        }`}
-                    >
-                        <i data-lucide="share-2" className="w-4 h-4"></i>
-                        Share Trip to WhatsApp
-                    </button>
-                </div>
+<div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
+    <div className="flex gap-2">
+        
+        <button 
+            onClick={() => {
+                if (selectedRoute.length === 0) return;
+                showQRCode(selectedRoute, "Expedition Route");
+            }}
+            disabled={selectedRoute.length === 0}
+            className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.95] ${
+                selectedRoute.length > 0 ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+            }`}
+        >
+            <i data-lucide="qr-code" className="w-4 h-4"></i>
+            Share
+        </button>
+    </div>
+</div>
             </div>
         </div>
     </div>
