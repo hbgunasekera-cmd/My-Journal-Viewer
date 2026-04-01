@@ -149,7 +149,7 @@
         .trim();
 };
 
-        function App() {
+   function App() {
             
     const [places, setPlaces] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -197,15 +197,11 @@
  
     
 useEffect(() => {
-    // Start tracking immediately
-    const watchId = getUserLocation();
     
-    // Other initializations
+    const watchId = getUserLocation();
     fetchPlaces();
     fetchInteractions();
     logVisit();
-
-    // Cleanup: Stop GPS when user closes the tab
     return () => {
         if (watchId) navigator.geolocation.clearWatch(watchId);
     };
