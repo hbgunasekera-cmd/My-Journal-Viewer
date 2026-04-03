@@ -594,7 +594,7 @@ const getDeviceType = () => {
         return;
     }
 
-    // High accuracy watcher - matches Testing.html
+    
     const watchId = navigator.geolocation.watchPosition(
         (pos) => {
             const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -1040,7 +1040,7 @@ const clearSelectedRoute = () => {
     </button>
 
     {/* --- STANDARDIZED DUAL HUB SYSTEM --- */}
-    {!isAddOpen && !isPlannerOpen && (
+    {!isAddOpen && !isPlannerOpen && !isArticleOpen && (
         <div className="fixed bottom-4 right-3 z-[4000] flex flex-col items-end gap-2 max-w-[140px]">
 
             {/* HUB 1: SOCIAL HUB */}
