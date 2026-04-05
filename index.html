@@ -196,12 +196,12 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
             {/* Header */}
             <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
                 <div>
-                    <h3 className="text-white font-black uppercase tracking-widest text-xs">Location Gallery</h3>
+                    <h3 className="text-grey font-grey uppercase tracking-widest text-xs">Location Gallery</h3>
                     <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
                 </div>
                 <button 
                     onClick={onClose}
-                    className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all active:scale-90"
+                    className="w-12 h-12 flex items-center justify-center bg-black/10 hover:bg-rose-500 text-white rounded-full transition-all active:scale-90"
                 >
                     <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
