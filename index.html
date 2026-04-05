@@ -122,6 +122,23 @@
 .animate-adventure {
     animation: slow-blink 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+}
         
         h1 { white-space: nowrap; }
     </style>
@@ -148,6 +165,80 @@
         .replace(/[^a-zA-Z0-9\s\-'\.]/g, '') 
         .trim();
 };
+
+const PhotoGallery = React.memo(({ photos, onClose }) => {
+    // Prevent the background from scrolling at the source
+    useEffect(() => {
+        const x = window.scrollX;
+        const y = window.scrollY;
+        
+        // Hard-lock the background position
+        window.onscroll = () => window.scrollTo(x, y);
+        document.body.style.overflow = 'hidden';
+
+        if (window.lucide) window.lucide.createIcons();
+
+        return () => {
+            window.onscroll = null;
+            document.body.style.overflow = 'unset';
+        };
+    }, []);
+
+    if (!photos || photos.length === 0) return null;
+
+    return (
+        <div 
+            className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200"
+            style={{ height: '100dvh' }}
+            onClick={(e) => e.stopPropagation()} // Prevents clicks leaking to the map/list
+        >
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-grey/10 shrink-0">
+                <div>
+                    <h3 className="text-grey font-black uppercase tracking-widest text-xs">Location Gallery</h3>
+                    <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
+                </div>
+                <button 
+                    onClick={onClose}
+                    className="w-12 h-12 flex items-center justify-center bg-grey/10 hover:bg-rose-500 text-grey rounded-full transition-all"
+                >
+                    <i data-lucide="x" className="w-6 h-6"></i>
+                </button>
+            </div>
+
+            {/* Content Container */}
+            <div 
+                className="flex-1 overflow-y-auto p-4 md:p-10"
+                style={{ 
+                    WebkitOverflowScrolling: 'touch', 
+                    overscrollBehavior: 'contain' 
+                }}
+            >
+                <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {photos.map((url, i) => (
+                        <div 
+                            key={i} 
+                            className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl"
+                        >
+                            <img 
+                                src={url} 
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                alt=""
+                            />
+                            {/* Counter Tag */}
+                            <div className="absolute top-5 left-5 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+                                <span className="text-[10px] font-black text-white">{i + 1}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                {/* Spacer to allow scrolling past the last image on mobile */}
+                <div className="h-32 shrink-0"></div>
+            </div>
+        </div>
+    );
+});
 
    function App() {
             
@@ -194,6 +285,9 @@
         category: 'Waterfall'
     });
     const [weatherData, setWeatherData] = React.useState({});
+    const [activeGallery, setActiveGallery] = useState(null); 
+    const [activeGalleryId, setActiveGalleryId] = useState(null);
+    const [activeId, setActiveId] = useState(null);
  
     
 useEffect(() => {
@@ -943,6 +1037,8 @@ const displayPlaces = React.useMemo(() => {
     });
 }, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
 
+
+
 const PrivacyModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
@@ -1270,13 +1366,18 @@ const clearSelectedRoute = () => {
     
     {/* ALBUM BUTTON - Soft Orange */}
     {place.photo_album_url && (
-        <button 
-            onClick={() => handleAlbumClick(place.photo_album_url)} 
-            className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-80 transition-all outline-none select-none border border-transparent"
+     <button onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveId(place.id); 
+    }}
+    className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-80 transition-all outline-none select-none border border-transparent"
         >
-            <i data-lucide="image" className="w-3.5 h-3.5"></i>
-            <span className="text-[8px] font-extrabold uppercase mt-1 tracking-tight">Album</span>
-        </button>
+    <i data-lucide="image" className="w-3.5 h-3.5"></i>
+            <span className="text-[8px] font-extrabold uppercase mt-1 tracking-tight">Gallery
+            </span>
+     </button>
+
     )}
     
     {/* READ BUTTON - Soft Emerald */}
@@ -1681,6 +1782,14 @@ const clearSelectedRoute = () => {
 </div>
 
     </div>
+)}
+
+{activeId && (
+    <PhotoGallery 
+        key={activeId} 
+        photos={places.find(p => p.id === activeId)?.album_photos || []} 
+        onClose={() => setActiveId(null)} 
+    />
 )}
 
 <PrivacyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
