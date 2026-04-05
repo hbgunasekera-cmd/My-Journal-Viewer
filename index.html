@@ -167,15 +167,16 @@ body.modal-open {
 };
 
 const PhotoGallery = React.memo(({ photos, onClose }) => {
-    // Prevent the background from scrolling at the source
+    // 1. HARD SCROLL LOCK: Prevents background jumping and layout shifts
     useEffect(() => {
         const x = window.scrollX;
         const y = window.scrollY;
         
-        // Hard-lock the background position
+        // Lock the background position strictly
         window.onscroll = () => window.scrollTo(x, y);
         document.body.style.overflow = 'hidden';
 
+        // Re-initialize icons for the portal
         if (window.lucide) window.lucide.createIcons();
 
         return () => {
@@ -190,17 +191,17 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
         <div 
             className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200"
             style={{ height: '100dvh' }}
-            onClick={(e) => e.stopPropagation()} // Prevents clicks leaking to the map/list
+            onClick={(e) => e.stopPropagation()} 
         >
             {/* Header */}
-            <div className="flex justify-between items-center p-6 border-b border-grey/10 shrink-0">
+            <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
                 <div>
-                    <h3 className="text-grey font-black uppercase tracking-widest text-xs">Location Gallery</h3>
+                    <h3 className="text-white font-black uppercase tracking-widest text-xs">Location Gallery</h3>
                     <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
                 </div>
                 <button 
                     onClick={onClose}
-                    className="w-12 h-12 flex items-center justify-center bg-grey/10 hover:bg-rose-500 text-grey rounded-full transition-all"
+                    className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all active:scale-90"
                 >
                     <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
@@ -219,20 +220,32 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         <div 
                             key={i} 
                             className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl"
+                            onContextMenu={(e) => e.preventDefault()} // Disable Right-Click
                         >
                             <img 
                                 src={url} 
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover select-none"
+                                style={{ 
+                                    WebkitUserDrag: 'none', // Disable dragging on Safari
+                                    WebkitTouchCallout: 'none' // Disable long-press on iOS
+                                }}
+                                draggable="false"
+                                onDragStart={(e) => e.preventDefault()}
                                 loading="lazy"
-                                alt=""
+                                alt="Journal Entry"
                             />
-                            {/* Counter Tag */}
-                            <div className="absolute top-5 left-5 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+
+                            {/* DOWNLOAD PROTECTION: Invisible Overlay Shield */}
+                            <div className="absolute inset-0 z-10 w-full h-full pointer-events-auto bg-transparent"></div>
+
+                            {/* Counter Tag (Placed above shield) */}
+                            <div className="absolute top-5 left-5 z-20 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none">
                                 <span className="text-[10px] font-black text-white">{i + 1}</span>
                             </div>
                         </div>
                     ))}
                 </div>
+                
                 {/* Spacer to allow scrolling past the last image on mobile */}
                 <div className="h-32 shrink-0"></div>
             </div>
