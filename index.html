@@ -167,21 +167,27 @@ body.modal-open {
 };
 
 const PhotoGallery = React.memo(({ photos, onClose }) => {
-    // 1. HARD SCROLL LOCK: Prevents background jumping and layout shifts
+    // 1. HARD SCROLL LOCK & ICON INITIALIZATION
     useEffect(() => {
+        // Capture current scroll position
         const x = window.scrollX;
         const y = window.scrollY;
         
-        // Lock the background position strictly
-        window.onscroll = () => window.scrollTo(x, y);
+        // Lock background position strictly
+        const lockScroll = () => window.scrollTo(x, y);
+        window.addEventListener('scroll', lockScroll);
         document.body.style.overflow = 'hidden';
 
-        // Re-initialize icons for the portal
-        if (window.lucide) window.lucide.createIcons();
+        // Re-initialize icons for the portal elements
+        // A 50ms timeout ensures the DOM nodes are actually rendered before scanning
+        const iconTimeout = setTimeout(() => {
+            if (window.lucide) window.lucide.createIcons();
+        }, 50);
 
         return () => {
-            window.onscroll = null;
+            window.removeEventListener('scroll', lockScroll);
             document.body.style.overflow = 'unset';
+            clearTimeout(iconTimeout);
         };
     }, []);
 
@@ -196,7 +202,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
             {/* Header */}
             <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
                 <div>
-                    <h3 className="text-grey font-grey uppercase tracking-widest text-xs">Location Gallery</h3>
+                    <h3 className="text-gray-400 font-medium uppercase tracking-widest text-xs">Location Gallery</h3>
                     <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
                 </div>
                 <button 
@@ -220,14 +226,14 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         <div 
                             key={i} 
                             className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl"
-                            onContextMenu={(e) => e.preventDefault()} // Disable Right-Click
+                            onContextMenu={(e) => e.preventDefault()}
                         >
                             <img 
                                 src={url} 
                                 className="w-full h-full object-cover select-none"
                                 style={{ 
-                                    WebkitUserDrag: 'none', // Disable dragging on Safari
-                                    WebkitTouchCallout: 'none' // Disable long-press on iOS
+                                    WebkitUserDrag: 'none',
+                                    WebkitTouchCallout: 'none'
                                 }}
                                 draggable="false"
                                 onDragStart={(e) => e.preventDefault()}
@@ -238,7 +244,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                             {/* DOWNLOAD PROTECTION: Invisible Overlay Shield */}
                             <div className="absolute inset-0 z-10 w-full h-full pointer-events-auto bg-transparent"></div>
 
-                            {/* Counter Tag (Placed above shield) */}
+                            {/* Counter Tag */}
                             <div className="absolute top-5 left-5 z-20 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none">
                                 <span className="text-[10px] font-black text-white">{i + 1}</span>
                             </div>
@@ -246,7 +252,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                     ))}
                 </div>
                 
-                {/* Spacer to allow scrolling past the last image on mobile */}
+                {/* Spacer for mobile scrolling */}
                 <div className="h-32 shrink-0"></div>
             </div>
         </div>
@@ -315,23 +321,37 @@ useEffect(() => {
 }, []);
 
 
-// --- 2. Centralized Icon Management ---
-useEffect(() => { 
-    const timer = setTimeout(() => {
-        if (window.lucide) {
+// --- 2. Centralized Icon Management (Safe & Optimized) ---
+useEffect(() => {
+    const rootNode = document.getElementById('root');
+    if (!rootNode || !window.lucide) return;
+
+    // Initial run
+    window.lucide.createIcons();
+
+    const observer = new MutationObserver((mutations) => {
+        // Check if any added nodes actually contain an <i> tag with data-lucide
+        const hasNewIcons = mutations.some(mutation => 
+            Array.from(mutation.addedNodes).some(node => 
+                node.nodeType === 1 && (node.querySelector('[data-lucide]') || node.hasAttribute('data-lucide'))
+            )
+        );
+
+        if (hasNewIcons) {
+            // DISCONNECT to prevent the infinite loop while Lucide modifies the DOM
+            observer.disconnect();
+            
             window.lucide.createIcons();
+            
+            // RECONNECT after Lucide is done
+            observer.observe(rootNode, { childList: true, subtree: true });
         }
-    }, 100); 
-    return () => clearTimeout(timer);
-}, [
-    displayPlaces, 
-    likes, 
-    comments,
-    isArticleOpen, isFilterOpen, isPlannerOpen, 
-    isSocialExpanded, isAddExpanded, isAddOpen, isFabExpanded,
-    weatherData,    
-    plannerSearch  
-]);
+    });
+
+    observer.observe(rootNode, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+}, []);
 
 // --- 3. Add Location Verification Map ---
 useEffect(() => {
