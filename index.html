@@ -33,18 +33,16 @@
     
    <script>
     (function() {
-        // Try to get key from LocalStorage or a global window variable
-        const mapsKey = localStorage.getItem('MAPS_KEY');
-        
-        if (!mapsKey) {
-            const key = prompt("Google Maps Key not found. Please paste it:");
-            if(key) localStorage.setItem('MAPS_KEY', key);
-            window.location.reload();
+       
+        const API_KEY = process.env.MAPS_KEY;
+
+        if (!API_KEY) {
+            console.warn("Maps API Key missing. Map features disabled.");
             return;
         }
 
         (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-            key: mapsKey, 
+            key: API_KEY,
             v: "weekly"
         });
     })();
@@ -158,25 +156,16 @@ body.modal-open {
     <div id="root" class="h-full"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+       
+       const { useState, useEffect, useMemo, useRef } = React;
         
-        // --- API CONFIGURATION LOADER ---
-const getSecret = (key, storageName) => {
-    // 1. Try Vercel/System Env (Process is injected by some builders)
-    if (typeof process !== 'undefined' && process.env?.[key]) {
-        return process.env[key];
-    }
-    // 2. Try LocalStorage fallback
-    return localStorage.getItem(storageName);
-};
-
-// Initialize Keys
-const SUPABASE_URL = getSecret('SUPABASE_URL', 'SB_URL') || 'https://vpslgikpaintiuayajmx.supabase.co';
-const SUPABASE_KEY = getSecret('SUPABASE_KEY', 'SB_KEY');
-const WEATHER_KEY = getSecret('WEATHER_KEY', 'WEATHER_KEY');
-
-
-               
+        const CONFIG = {
+          SB_URL: 'https://vpslgikpaintiuayajmx.supabase.co',
+          SB_KEY: process.env.SUPABASE_KEY, 
+          WEATHER: process.env.OPEN_WEATHER_KEY    
+        };
+        const supabase = window.supabase.createClient(CONFIG.SB_URL, CONFIG.SB_KEY);
+        
         const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
         
