@@ -32,11 +32,22 @@
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     
    <script>
-    (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-        key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs", 
-        v: "weekly",
-        libraries: ["places"] 
-    });
+    (function() {
+        // Try to get key from LocalStorage or a global window variable
+        const mapsKey = localStorage.getItem('MAPS_KEY');
+        
+        if (!mapsKey) {
+            const key = prompt("Google Maps Key not found. Please paste it:");
+            if(key) localStorage.setItem('MAPS_KEY', key);
+            window.location.reload();
+            return;
+        }
+
+        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+            key: mapsKey, 
+            v: "weekly"
+        });
+    })();
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -149,10 +160,22 @@ body.modal-open {
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
         
-        const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
+        // --- API CONFIGURATION LOADER ---
+const getSecret = (key, storageName) => {
+    // 1. Try Vercel/System Env (Process is injected by some builders)
+    if (typeof process !== 'undefined' && process.env?.[key]) {
+        return process.env[key];
+    }
+    // 2. Try LocalStorage fallback
+    return localStorage.getItem(storageName);
+};
+
+// Initialize Keys
+const SUPABASE_URL = getSecret('SUPABASE_URL', 'SB_URL') || 'https://vpslgikpaintiuayajmx.supabase.co';
+const SUPABASE_KEY = getSecret('SUPABASE_KEY', 'SB_KEY');
+const WEATHER_KEY = getSecret('WEATHER_KEY', 'WEATHER_KEY');
+
+
                
         const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
