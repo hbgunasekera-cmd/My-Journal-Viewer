@@ -32,20 +32,11 @@
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     
    <script>
-    (function() {
-        // Safe check: Only try to read process.env if process exists
-        const API_KEY = typeof process !== 'undefined' && process.env ? process.env.MAPS_KEY : '';
-
-        if (!API_KEY) {
-            console.warn("Maps API Key missing. Map features disabled.");
-            return;
-        }
-
-        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-            key: API_KEY,
-            v: "weekly"
-        });
-    })();
+    (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+        key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs", 
+        v: "weekly",
+        libraries: ["places"] 
+    });
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -156,21 +147,13 @@ body.modal-open {
     <div id="root" class="h-full"></div>
 
     <script type="text/babel">
-       
         const { useState, useEffect, useMemo, useRef } = React;
         
-        const getSafeEnv = (key) => {
-         return typeof process !== 'undefined' && process.env ? process.env[key] : '';
-        };
-
-        const CONFIG = {
-         SB_URL: 'https://vpslgikpaintiuayajmx.supabase.co',
-         SB_KEY: getSafeEnv('SUPABASE_KEY'), 
-         WEATHER: getSafeEnv('OPEN_WEATHER_KEY')    
-        };
-
-const supabase = window.supabase.createClient(CONFIG.SB_URL, CONFIG.SB_KEY);
-        
+        const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
+               
         const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
         
