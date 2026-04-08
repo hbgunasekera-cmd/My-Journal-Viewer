@@ -932,11 +932,14 @@ useEffect(() => {
             const search = (plannerSearch || "").toLowerCase();
             const name = (place.place_name || "").toLowerCase();
             const district = (place.district || "").toLowerCase();
+            const locality = (place.locality || "").toLowerCase(); 
             const cat = (place.category || "").toLowerCase();
 
+            // Consolidated Search: Matches Name, District, Locality, or Category
             const matchesSearch = name.includes(search) || 
-                                district.includes(search) || 
-                                locality.includes(search);
+                                  district.includes(search) || 
+                                  locality.includes(search) ||
+                                  cat.includes(search);
 
             return (place.status === 'done' || place.status === 'pending') && matchesSearch;
         });
@@ -1042,37 +1045,32 @@ const displayPlaces = React.useMemo(() => {
         const matchesStatus = place.status === statusFilter;
         const matchesCategory = filterTag === 'All' || place.category === filterTag;
         
-        // Prepare search strings for multi-column matching
         const search = (searchTerm || "").toLowerCase();
         const name = (place.place_name || "").toLowerCase();
         const district = (place.district || "").toLowerCase();
         const locality = (place.locality || "").toLowerCase();
+        const cat = (place.category || "").toLowerCase();
         
-        // Search across Name, District, and Locality
+        // Search across all identifying fields
         const matchesSearch = name.includes(search) || 
                               district.includes(search) || 
-                              locality.includes(search);
+                              locality.includes(search) ||
+                              cat.includes(search);
         
         return matchesStatus && matchesCategory && matchesSearch;
     });
 
     // 2. SORTING LOGIC
     return filtered.sort((a, b) => {
-        // Sort by ID (Newest First)
-        if (sortBy === 'recent') {
-            return b.id - a.id;
-        }
+        if (sortBy === 'recent') return b.id - a.id;
 
-        // Sort by Distance (Nearest First)
         if (sortBy === 'distance' && userCoords?.lat && userCoords?.lng) {
             const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
             const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
-            
             if (isNaN(distA) || isNaN(distB)) return 0;
             return distA - distB;
         }
 
-        // Default: Alphabetical
         return (a.place_name || "").localeCompare(b.place_name || "");
     });
 }, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
