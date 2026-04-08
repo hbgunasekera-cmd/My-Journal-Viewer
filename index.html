@@ -89,9 +89,9 @@
 
         .animate-icon-highlight { animation: icon-pulse 2s infinite; }
         .scrollable-list {
-    height: calc(100vh - 280px); /* Adjusts based on the new smaller header */
-    overflow-y: auto;
-}
+         overflow-y: auto;
+        overscroll-behavior: contain; /* Prevents "bounce" scrolling behind the modal */
+        }
 
 /* Fix Google Maps Autocomplete Z-Index Bug */
 .pac-container {
@@ -143,7 +143,7 @@ body.modal-open {
         h1 { white-space: nowrap; }
     </style>
 </head>
-<body class="h-screen flex flex-col">
+<body class="h-[100dvh] flex flex-col">
     <div id="root" class="h-full"></div>
 
     <script type="text/babel">
@@ -1468,14 +1468,14 @@ const clearSelectedRoute = () => {
                 <img src={ViewingArticle.cover_photo_url} className="h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                 <button 
-                    onClick={() => setisArticleOpen(false)}
-                    className="absolute top-6 right-6 w-10 h-10 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all"
-                >
-                    <i data-lucide="x" className="w-5 h-5"></i>
-                </button>
+    onClick={() => setisArticleOpen(false)}
+    className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 bg-black/30 md:bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-black/50 md:hover:bg-white/40 transition-all z-10"
+>
+    <i data-lucide="x" className="w-5 h-5"></i>
+</button>
             </div>
 
-            <div className="p-8 overflow-y-auto scrollable-list no-scrollbar">
+            <div className="flex-1 p-5 md:p-8 overflow-y-auto scrollable-list no-scrollbar">
                 {/* Meta Row */}
 <div className="flex items-center justify-between mb-4">
     <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-100">
