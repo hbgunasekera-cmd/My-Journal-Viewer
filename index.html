@@ -251,6 +251,15 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
     );
 });
 
+function useDebounce(value, delay = 300) {
+    const [debouncedValue, setDebouncedValue] = React.useState(value);
+    React.useEffect(() => {
+        const handler = setTimeout(() => setDebouncedValue(value), delay);
+        return () => clearTimeout(handler);
+    }, [value, delay]);
+    return debouncedValue;
+}
+
    function App() {
             
     const [places, setPlaces] = useState([]);
@@ -296,11 +305,15 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
     status: 'backlog',
     category: 'Waterfall'
     });
-    const [debouncedSearch, setDebouncedSearch] = React.useState("");
+    
+    const debouncedSearch = useDebounce(searchTerm, 300);
+    const debouncedPlannerSearch = useDebounce(plannerSearch, 300);
+
     const [weatherData, setWeatherData] = React.useState({});
     const [activeGallery, setActiveGallery] = useState(null); 
     const [activeGalleryId, setActiveGalleryId] = useState(null);
     const [activeId, setActiveId] = useState(null);
+    
  
     
 // 1. Unified Initialization & Location Logic
@@ -945,16 +958,20 @@ const handleAddPlace = async (e) => {
     }
 };
 
-useEffect(() => {
+React.useEffect(() => {
+    // Only run if planner is open and we have data
     if (isPlannerOpen && places.length > 0) {
-        const filteredForWeather = places.filter(place => {
-            const search = (plannerSearch || "").toLowerCase();
+            const filteredForWeather = places.filter(place => {
+           
+            const search = (debouncedPlannerSearch || "").toLowerCase();
+
+            if (!search) return place.status === 'done' || place.status === 'pending';
+
             const name = (place.place_name || "").toLowerCase();
             const district = (place.district || "").toLowerCase();
-            const locality = (place.locality || "").toLowerCase(); 
+            const locality = (place.locality || "").toLowerCase();
             const cat = (place.category || "").toLowerCase();
 
-            // Consolidated Search: Matches Name, District, Locality, or Category
             const matchesSearch = name.includes(search) || 
                                   district.includes(search) || 
                                   locality.includes(search) ||
@@ -963,11 +980,13 @@ useEffect(() => {
             return (place.status === 'done' || place.status === 'pending') && matchesSearch;
         });
 
+        
         if (filteredForWeather.length > 0) {
             fetchRouteWeather(filteredForWeather);
         }
     }
-}, [isPlannerOpen, plannerSearch, places]);
+
+}, [isPlannerOpen, debouncedPlannerSearch, places]);
 
 
 
@@ -1045,24 +1064,12 @@ const showQRCode = (points, name = "My Travel Route") => {
 };
 
 
-
-   
-
-
-React.useEffect(() => {
-    const handler = setTimeout(() => {
-        setDebouncedSearch(searchTerm);
-    }, 300); // 300ms delay
-    return () => clearTimeout(handler);
-}, [searchTerm]);
-
 const displayPlaces = React.useMemo(() => {
     // 1. FILTERING LOGIC
-    const filtered = places.filter(place => {
+   
+    const filtered = placesWithDistance.filter(place => {
         const matchesStatus = place.status === statusFilter;
         const matchesCategory = filterTag === 'All' || place.category === filterTag;
-        
-        // Use debouncedSearch instead of searchTerm for performance
         const search = (debouncedSearch || "").toLowerCase();
         
         // If there's no search term, don't waste cycles on string operations
@@ -1091,12 +1098,10 @@ const displayPlaces = React.useMemo(() => {
 
         // Sort by Distance (Nearest First)
         if (sortBy === 'distance' && userCoords?.lat && userCoords?.lng) {
-            // Note: If the app remains laggy, consider pre-calculating distances 
-            // outside of the sort function to avoid O(n log n) distance calculations.
-            const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
-            const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
+           
+            const distA = a.currentDistance !== undefined ? a.currentDistance : Infinity;
+            const distB = b.currentDistance !== undefined ? b.currentDistance : Infinity;
             
-            if (isNaN(distA) || isNaN(distB)) return 0;
             return distA - distB;
         }
 
@@ -1105,7 +1110,7 @@ const displayPlaces = React.useMemo(() => {
     });
     
 
-}, [places, statusFilter, filterTag, debouncedSearch, sortBy, userCoords]);
+}, [placesWithDistance, statusFilter, filterTag, debouncedSearch, sortBy, userCoords]);
 
 
 
