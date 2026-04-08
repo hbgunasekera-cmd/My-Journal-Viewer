@@ -302,23 +302,38 @@ useEffect(() => {
 }, []);
 
 
-// --- 2. Centralized Icon Management ---
-useEffect(() => { 
-    const timer = setTimeout(() => {
-        if (window.lucide) {
+// --- 2. Centralized Icon Management (Safe & Optimized) ---
+useEffect(() => {
+    const rootNode = document.getElementById('root');
+    if (!rootNode || !window.lucide) return;
+
+    // Initial run
+    window.lucide.createIcons();
+
+    const observer = new MutationObserver((mutations) => {
+        // Check if any added nodes actually contain an <i> tag with data-lucide
+        const hasNewIcons = mutations.some(mutation => 
+            Array.from(mutation.addedNodes).some(node => 
+                node.nodeType === 1 && (node.querySelector('[data-lucide]') || node.hasAttribute('data-lucide'))
+            )
+        );
+
+        if (hasNewIcons) {
+            // DISCONNECT to prevent the infinite loop while Lucide modifies the DOM
+            observer.disconnect();
+            
             window.lucide.createIcons();
+            
+            // RECONNECT after Lucide is done
+            observer.observe(rootNode, { childList: true, subtree: true });
         }
-    }, 100); 
-    return () => clearTimeout(timer);
-}, [
-    displayPlaces, 
-    likes, 
-    comments,
-    isArticleOpen, isFilterOpen, isPlannerOpen, 
-    isSocialExpanded, isAddExpanded, isAddOpen, isFabExpanded,
-    weatherData,    
-    plannerSearch  
-]);
+    });
+
+    observer.observe(rootNode, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+}, []);
+
 
 // --- 3. Add Location Verification Map ---
 useEffect(() => {
