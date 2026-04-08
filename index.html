@@ -275,14 +275,15 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
     const [isSocialOpen, setIsSocialOpen] = React.useState(false);
     const [isPrivacyOpen, setIsPrivacyOpen] = React.useState(false);
     const [formData, setFormData] = useState({
-        place_name: '',
-        district: '',
-        latitude: '',
-        longitude: '',
-        map_url: '',
-        image_url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b',
-        status: 'backlog',
-        category: 'Waterfall'
+    place_name: '',
+    district: '',
+    locality: '',
+    latitude: '',
+    longitude: '',
+    map_url: '',
+    image_url: 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png',
+    status: 'backlog',
+    category: 'Waterfall'
     });
     const [weatherData, setWeatherData] = React.useState({});
     const [activeGallery, setActiveGallery] = useState(null); 
@@ -794,14 +795,21 @@ useEffect(() => {
                     componentRestrictions: { country: "lk" }
                 });
 
-                autocompleteRef.current.addListener("place_changed", () => {
+    autocompleteRef.current.addListener("place_changed", () => {
     const place = autocompleteRef.current.getPlace();
     if (!place.geometry) return;
 
     const lat = place.geometry.location.lat();
     const lng = place.geometry.location.lng();
+
+    // Extract District (Level 2 Admin Area)
     const districtName = place.address_components?.find(c => 
         c.types.includes("administrative_area_level_2")
+    )?.long_name || '';
+
+    // Extract Locality (City, Town, or Neighborhood)
+    const localityName = place.address_components?.find(c => 
+        c.types.includes("locality") || c.types.includes("sublocality")
     )?.long_name || '';
 
     setFormData(prev => ({
@@ -810,23 +818,23 @@ useEffect(() => {
         latitude: lat,
         longitude: lng,
         map_url: place.url,
-        district: districtName
+        district: districtName,
+        locality: localityName // Captured for multi-column search
     }));
 
-    
     if (addMapRef.current) {
-        addMapRef.current.setView([lat, lng], 14); // Zoom in on the new spot
+        addMapRef.current.setView([lat, lng], 14); 
         
-        // Remove the previous yellow dot if the user searched again
+        // Clear previous temporary search marker
         if (tempMarkerRef.current) {
             addMapRef.current.removeLayer(tempMarkerRef.current);
         }
 
-        // Add the new bright yellow dot
+        // Add the bright yellow dot for the newly selected spot
         tempMarkerRef.current = L.circleMarker([lat, lng], {
             radius: 8,
             fillColor: '#facc15', // Tailwind Yellow-400
-            color: '#ca8a04', // Tailwind Yellow-600 border
+            color: '#ca8a04',     // Tailwind Yellow-600 border
             weight: 3,
             fillOpacity: 1
         })
@@ -895,12 +903,18 @@ const handleAddPlace = async (e) => {
         setisAddOpen(false);
         
         // Reset local form state
-        setFormData({
-            place_name: '', district: '', latitude: '', longitude: '',
-            map_url: '', image_url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b',
-            status: 'pending', category: 'Waterfall'
-        });
-
+        
+     setFormData({
+    place_name: '', 
+    district: '', 
+    locality: '',
+    latitude: '', 
+    longitude: '',
+    map_url: '', 
+    image_url: 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png',
+    status: 'pending', 
+    category: 'Waterfall'
+     });
         // Clean up the yellow marker so it's fresh next time
         if (tempMarkerRef.current && addMapRef.current) {
             addMapRef.current.removeLayer(tempMarkerRef.current);
@@ -912,16 +926,19 @@ const handleAddPlace = async (e) => {
     }
 };
 
-// Trigger weather fetch for all items currently visible in the planner list
 useEffect(() => {
     if (isPlannerOpen && places.length > 0) {
-        // We fetch weather for the currently filtered items to be efficient
         const filteredForWeather = places.filter(place => {
-            const name = (place.place_name || "").toLowerCase();
-            const cat = (place.category || "").toLowerCase();
             const search = (plannerSearch || "").toLowerCase();
-            return (place.status === 'done' || place.status === 'pending') && 
-                   (name.includes(search) || cat.includes(search));
+            const name = (place.place_name || "").toLowerCase();
+            const district = (place.district || "").toLowerCase();
+            const cat = (place.category || "").toLowerCase();
+
+            const matchesSearch = name.includes(search) || 
+                                district.includes(search) || 
+                                locality.includes(search);
+
+            return (place.status === 'done' || place.status === 'pending') && matchesSearch;
         });
 
         if (filteredForWeather.length > 0) {
@@ -1025,16 +1042,21 @@ const displayPlaces = React.useMemo(() => {
         const matchesStatus = place.status === statusFilter;
         const matchesCategory = filterTag === 'All' || place.category === filterTag;
         
+        // Prepare search strings for multi-column matching
+        const search = (searchTerm || "").toLowerCase();
         const name = (place.place_name || "").toLowerCase();
         const district = (place.district || "").toLowerCase();
-        const search = (searchTerm || "").toLowerCase();
+        const locality = (place.locality || "").toLowerCase();
         
-        const matchesSearch = name.includes(search) || district.includes(search);
+        // Search across Name, District, and Locality
+        const matchesSearch = name.includes(search) || 
+                              district.includes(search) || 
+                              locality.includes(search);
         
         return matchesStatus && matchesCategory && matchesSearch;
     });
 
-    // 2. SORTING LOGIC (Refined for Accuracy)
+    // 2. SORTING LOGIC
     return filtered.sort((a, b) => {
         // Sort by ID (Newest First)
         if (sortBy === 'recent') {
@@ -1042,18 +1064,15 @@ const displayPlaces = React.useMemo(() => {
         }
 
         // Sort by Distance (Nearest First)
-        // Ensure userCoords is available before attempting calculation
-        if (sortBy === 'distance' && userCoords && userCoords.lat && userCoords.lng) {
+        if (sortBy === 'distance' && userCoords?.lat && userCoords?.lng) {
             const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
             const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
             
-            // Handle edge cases where distance might be NaN
             if (isNaN(distA) || isNaN(distB)) return 0;
-            
             return distA - distB;
         }
 
-        // Default: Sort by Place Name alphabetically if no other sort is active
+        // Default: Alphabetical
         return (a.place_name || "").localeCompare(b.place_name || "");
     });
 }, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
