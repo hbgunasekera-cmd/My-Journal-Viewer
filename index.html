@@ -290,35 +290,56 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
     const [activeId, setActiveId] = useState(null);
  
     
+// 1. Unified Initialization & Location Logic
 useEffect(() => {
-    
+    // This part was missing in your Block 2 - without it, data never loads!
     const watchId = getUserLocation();
     fetchPlaces();
     fetchInteractions();
     logVisit();
+
     return () => {
         if (watchId) navigator.geolocation.clearWatch(watchId);
     };
 }, []);
 
+// 2. Mobile-Optimized Icon Management (Safe MutationObserver)
+useEffect(() => {
+    // Target the body or a specific container to ensure it exists
+    const targetNode = document.body;
+    if (!window.lucide) return;
 
-// --- 2. Centralized Icon Management ---
-useEffect(() => { 
-    const timer = setTimeout(() => {
-        if (window.lucide) {
-            window.lucide.createIcons();
+    // Initial render call
+    window.lucide.createIcons();
+
+    // Use a small debounce to prevent "Layout Thrashing" on mobile
+    let iconTimer;
+    const observer = new MutationObserver((mutations) => {
+        const hasNewIcons = mutations.some(mutation => 
+            Array.from(mutation.addedNodes).some(node => 
+                node.nodeType === 1 && (node.querySelector('[data-lucide]') || node.hasAttribute('data-lucide'))
+            )
+        );
+
+        if (hasNewIcons) {
+            clearTimeout(iconTimer);
+            iconTimer = setTimeout(() => {
+                // Temporarily disconnect to modify DOM safely
+                observer.disconnect();
+                window.lucide.createIcons();
+                // Reconnect after Lucide is finished
+                observer.observe(targetNode, { childList: true, subtree: true });
+            }, 50); // 50ms buffer allows mobile layout to stabilize
         }
-    }, 100); 
-    return () => clearTimeout(timer);
-}, [
-    displayPlaces, 
-    likes, 
-    comments,
-    isArticleOpen, isFilterOpen, isPlannerOpen, 
-    isSocialExpanded, isAddExpanded, isAddOpen, isFabExpanded,
-    weatherData,    
-    plannerSearch  
-]);
+    });
+
+    observer.observe(targetNode, { childList: true, subtree: true });
+
+    return () => {
+        observer.disconnect();
+        clearTimeout(iconTimer);
+    };
+}, []);
 
 // --- 3. Add Location Verification Map ---
 useEffect(() => {
