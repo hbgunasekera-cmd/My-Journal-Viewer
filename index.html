@@ -8,7 +8,7 @@
 
     <meta property="og:title" content="My Journal">
     <meta property="og:description" content="Explore my travel bucket list and join the adventure.">
-    <meta property="og:image" content="https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/My%20Journal.png?v=2">
+    <meta property="og:image" content="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&h=630">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -45,13 +45,12 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         
-         /* Update in your <style> block */
-body { 
-    font-family: 'Plus Jakarta Sans', sans-serif; 
-    background-color: #F8FAFC; 
-    overflow-y: auto; /* Change from hidden to auto */
-    user-select: none; 
-}
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #F8FAFC; 
+            overflow: hidden; 
+            user-select: none; 
+        }
 
         /* UI Helpers */
         .scrollable-list::-webkit-scrollbar { width: 6px; }
@@ -90,9 +89,9 @@ body {
 
         .animate-icon-highlight { animation: icon-pulse 2s infinite; }
         .scrollable-list {
-         overflow-y: auto;
-        overscroll-behavior: contain; /* Prevents "bounce" scrolling behind the modal */
-        }
+    height: calc(100vh - 280px); /* Adjusts based on the new smaller header */
+    overflow-y: auto;
+}
 
 /* Fix Google Maps Autocomplete Z-Index Bug */
 .pac-container {
@@ -142,13 +141,9 @@ body.modal-open {
 }
         
         h1 { white-space: nowrap; }
-   input, textarea, select {
-    user-select: auto !important;
-}     
-        
     </style>
 </head>
-<body class="h-[100dvh] flex flex-col">
+<body class="h-screen flex flex-col">
     <div id="root" class="h-full"></div>
 
     <script type="text/babel">
@@ -1311,135 +1306,142 @@ const clearSelectedRoute = () => {
                     <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
                         
-{/* Location Cards */}
-
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
-        {displayPlaces.map(place => (
-            <div key={place.id} className="group relative rounded-[2.5rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl min-h-[450px]">
-                
-                {/* Image Section - aspect-video keeps height consistent across row */}
-                <div className="aspect-video w-full relative bg-slate-100 overflow-hidden shrink-0">
-                    {place.cover_photo_url && (
-                        <img 
-                            src={place.cover_photo_url} 
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                            alt={place.place_name}
-                        />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                    
-                    {/* Status Badge */}
-                    <div className="absolute top-4 left-4">
-                        <span className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${
-                            place.status === 'done' 
-                                ? 'bg-emerald-500/90 text-white' 
-                                : 'bg-amber-500/90 text-white'
-                        }`}>
-                            {place.status === 'done' ? '✨ Visited' : '⏳ Bucket List'}
-                        </span>
-                    </div>
-
-                    <div className="absolute bottom-3 left-4 pr-4">
-                        <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
-                            {auditLocationName(place.place_name)}
-                        </h3>
-                    </div>
-                </div>
-                
-                {/* Content Section */}
-                <div className="p-6 flex flex-col flex-grow">
-                    <div className="flex justify-between items-start mb-2">
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
-                                {place.locality || 'Explore'}
-                            </span>
-                        </div>
-                        <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100 text-[8px] font-black uppercase shrink-0">
-                            {place.category}
-                        </span>
-                    </div>
-
-                    {/* Distance Display */}
-                    <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                        {userCoords 
-                            ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY` 
-                            : "Location Access Required"}
-                    </div>
-
-                    {/* Interactions - mt-auto ensures this snaps to the bottom of the content area */}
-                    {place.status !== 'pending' && (
-                        <div className="flex items-center gap-4 mt-auto pb-5 border-b border-slate-50">
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
-                                className="flex items-center gap-1.5 group outline-none select-none"
-                            >
-                                <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
-                                    <i data-lucide="heart" className={`w-4 h-4 ${likes[place.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`}></i>
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
-                            </button>
-
-                            <button 
-                                onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    setViewingArticle(place); 
-                                    setisArticleOpen(true); 
-                                }}
-                                className="flex items-center gap-1.5 group outline-none select-none"
-                            >
-                                <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
-                                    <i data-lucide="message-circle" className="w-4 h-4 text-slate-400"></i>
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Action Buttons - grid-cols-3 and shrink-0 prevent squishing */}
-                    <div className="grid grid-cols-3 gap-3 mt-5 shrink-0">
-                        {place.google_maps_url && (
-                            <button 
-                                onClick={() => window.open(place.google_maps_url, '_blank')}
-                                className="flex flex-col items-center justify-center py-3 rounded-2xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-95 transition-all outline-none border border-transparent"
-                            >
-                                <i data-lucide="map" className="w-4 h-4"></i>
-                                <span className="text-[9px] font-black uppercase mt-1 tracking-tighter">Maps</span>
-                            </button>
-                        )}
-                        
-                        {place.photo_album_url && (
-                            <button 
-                                onClick={(e) => { 
-                                    e.preventDefault(); 
-                                    e.stopPropagation(); 
-                                    setActiveId(place.id); 
-                                }}
-                                className="flex flex-col items-center justify-center py-3 rounded-2xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-95 transition-all outline-none border border-transparent"
-                            >
-                                <i data-lucide="image" className="w-4 h-4"></i>
-                                <span className="text-[9px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
-                            </button>
-                        )}
-                        
-                        {place.ai_article && typeof place.ai_article === 'object' && place.ai_article.story && (
-                            <button 
-                                onClick={() => { 
-                                    setViewingArticle(place); 
-                                    setisArticleOpen(true); 
-                                }}
-                                className="flex flex-col items-center justify-center py-3 rounded-2xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-95 transition-all outline-none border border-emerald-100/50 group"
-                            >
-                                <i data-lucide="book-open" className="w-4 h-4 group-hover:scale-110 transition-transform"></i>
-                                <span className="text-[9px] font-black uppercase mt-1 tracking-tighter">Read</span>
-                            </button>
-                        )}
-                    </div>
-                </div>
+                           {/* Location Cards */}
+                           
+{displayPlaces.map(place => (
+    <div key={place.id} className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl">
+        {/* Image Section */}
+        <div className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
+            {place.cover_photo_url && (
+                <img 
+                    src={place.cover_photo_url} 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                    alt={place.place_name}
+                />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+            
+            {/* Status Badge Overlay */}
+            <div className="absolute top-4 left-4">
+                <span className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${
+                    place.status === 'done' 
+                        ? 'bg-emerald-500/90 text-white' 
+                        : 'bg-amber-500/90 text-white'
+                }`}>
+                    {place.status === 'done' ? '✨ Visited' : '⏳ Bucket List'}
+                </span>
             </div>
-        ))}
+
+            <div className="absolute bottom-3 left-4 pr-4">
+                <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
+                    {auditLocationName(place.place_name)}
+                </h3>
+            </div>
+        </div>
+        
+        {/* Content Section */}
+        <div className="p-4 flex flex-col flex-1">
+            <div className="flex justify-between items-start mb-1">
+                <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
+                        {place.locality || 'Explore'}
+                    </span>
+                </div>
+                <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100 text-[8px] font-black uppercase shrink-0">
+                    {place.category}
+                </span>
+            </div>
+
+            {/* Distance Display - Fixed with 4 coordinate arguments */}
+            <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                {userCoords 
+                    ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY` 
+                    : "Location Access Required"}
+            </div>
+
+            {/* Interactions - Only visible if NOT pending */}
+{place.status !== 'pending' && (
+    <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-50">
+        {/* Like Button */}
+        <button 
+            onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
+            className="flex items-center gap-1.5 group outline-none select-none"
+        >
+            <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
+                <i data-lucide="heart" className={`w-4 h-4 ${likes[place.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`}></i>
+            </div>
+            <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
+        </button>
+
+        {/* Comment Button */}
+        <button 
+            onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setisArticleOpen(true); }}
+            className="flex items-center gap-1.5 group outline-none select-none"
+        >
+            <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
+                <i data-lucide="message-circle" className="w-4 h-4 text-slate-400"></i>
+            </div>
+            <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
+        </button>
     </div>
-  </div> 
-                       
+)}
+
+            {/* Action Buttons */}
+<div className="grid grid-cols-3 gap-2.5 mt-auto pt-4 border-t border-slate-100/60">
+    {/* MAPS BUTTON - Soft Slate */}
+    {place.google_maps_url && (
+        <button 
+            onClick={() => window.open(place.google_maps_url, '_blank')}
+            className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-80 transition-all outline-none select-none border border-transparent"
+        >
+            <i data-lucide="map" className="w-3.5 h-3.5"></i>
+            <span className="text-[8px] font-extrabold uppercase mt-1 tracking-tight">Maps</span>
+        </button>
+    )}
+    
+    {/* ALBUM BUTTON - Soft Orange */}
+    {place.photo_album_url && (
+     <button onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveId(place.id); 
+    }}
+    className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-80 transition-all outline-none select-none border border-transparent"
+        >
+    <i data-lucide="image" className="w-3.5 h-3.5"></i>
+            <span className="text-[8px] font-extrabold uppercase mt-1 tracking-tight">Gallery
+            </span>
+     </button>
+
+    )}
+    
+    {/* READ BUTTON - Soft Emerald */}
+{place.ai_article && 
+ typeof place.ai_article === 'object' && 
+ place.ai_article.story && (
+    <button 
+        onClick={() => { 
+            // Ensure the state setters match your Modal logic
+            if (typeof setViewingArticle === 'function') setViewingArticle(place); 
+            if (typeof setisArticleOpen === 'function') setisArticleOpen(true); 
+        }}
+        className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
+        title="Read Travel Journal"
+    >
+        <i 
+            data-lucide="book-open" 
+            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"
+        ></i>
+        <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
+    </button>
+)}
+</div>
+             </div>
+            </div>
+           ))}
+           
+         </div> 
+                        
                         
           {/* ADD THE FOOTER HERE - Inside the scrollable area */}
             <footer className="py-10 text-center border-t border-slate-100 mt-10">
@@ -1461,20 +1463,20 @@ const clearSelectedRoute = () => {
         {/* Backdrop */}
         <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setisArticleOpen(false)}></div>
         
-        <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-[90dvh] md:h-auto md:max-h-[90vh]">
+        <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Header Image */}
             <div className="relative h-48 w-full shrink-0">
                 <img src={ViewingArticle.cover_photo_url} className="h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                 <button 
-    onClick={() => setisArticleOpen(false)}
-    className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 bg-black/30 md:bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-black/50 md:hover:bg-white/40 transition-all z-10"
->
-    <i data-lucide="x" className="w-5 h-5"></i>
-</button>
+                    onClick={() => setisArticleOpen(false)}
+                    className="absolute top-6 right-6 w-10 h-10 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all"
+                >
+                    <i data-lucide="x" className="w-5 h-5"></i>
+                </button>
             </div>
 
-            <div className="flex-1 p-5 md:p-8 overflow-y-auto scrollable-list no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="p-8 overflow-y-auto scrollable-list no-scrollbar">
                 {/* Meta Row */}
 <div className="flex items-center justify-between mb-4">
     <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-100">
@@ -1566,7 +1568,7 @@ const clearSelectedRoute = () => {
                             type="text" 
                             value={NewCommentText}
                             onChange={(e) => setNewCommentText(e.target.value)}
-                            placeholder="Share your thoughts ...." 
+                            placeholder="Add your trail note..." 
                             className="w-full bg-slate-100 border-2 border-transparent focus:border-slate-900 focus:bg-white rounded-2xl px-5 py-4 text-xs font-bold transition-all outline-none pr-12"
                             onKeyDown={async (e) => {
                                 if (e.key === 'Enter' && NewCommentText.trim()) {
