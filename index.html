@@ -122,6 +122,23 @@
 .animate-adventure {
     animation: slow-blink 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+}
         
         h1 { white-space: nowrap; }
     </style>
@@ -150,27 +167,20 @@
 };
 
 const PhotoGallery = React.memo(({ photos, onClose }) => {
-    // 1. HARD SCROLL LOCK & ICON INITIALIZATION
+    // Prevent the background from scrolling at the source
     useEffect(() => {
-        // Capture current scroll position
         const x = window.scrollX;
         const y = window.scrollY;
         
-        // Lock background position strictly
-        const lockScroll = () => window.scrollTo(x, y);
-        window.addEventListener('scroll', lockScroll);
+        // Hard-lock the background position
+        window.onscroll = () => window.scrollTo(x, y);
         document.body.style.overflow = 'hidden';
 
-        // Re-initialize icons for the portal elements
-        // A 50ms timeout ensures the DOM nodes are actually rendered before scanning
-        const iconTimeout = setTimeout(() => {
-            if (window.lucide) window.lucide.createIcons();
-        }, 50);
+        if (window.lucide) window.lucide.createIcons();
 
         return () => {
-            window.removeEventListener('scroll', lockScroll);
+            window.onscroll = null;
             document.body.style.overflow = 'unset';
-            clearTimeout(iconTimeout);
         };
     }, []);
 
@@ -180,17 +190,17 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
         <div 
             className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200"
             style={{ height: '100dvh' }}
-            onClick={(e) => e.stopPropagation()} 
+            onClick={(e) => e.stopPropagation()} // Prevents clicks leaking to the map/list
         >
             {/* Header */}
-            <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
+            <div className="flex justify-between items-center p-6 border-b border-grey/10 shrink-0">
                 <div>
-                    <h3 className="text-gray-400 font-medium uppercase tracking-widest text-xs">Location Gallery</h3>
+                    <h3 className="text-grey font-black uppercase tracking-widest text-xs">Location Gallery</h3>
                     <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
                 </div>
                 <button 
                     onClick={onClose}
-                    className="w-12 h-12 flex items-center justify-center bg-black/10 hover:bg-rose-500 text-white rounded-full transition-all active:scale-90"
+                    className="w-12 h-12 flex items-center justify-center bg-grey/10 hover:bg-rose-500 text-grey rounded-full transition-all"
                 >
                     <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
@@ -209,39 +219,28 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         <div 
                             key={i} 
                             className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl"
-                            onContextMenu={(e) => e.preventDefault()}
                         >
                             <img 
                                 src={url} 
-                                className="w-full h-full object-cover select-none"
-                                style={{ 
-                                    WebkitUserDrag: 'none',
-                                    WebkitTouchCallout: 'none'
-                                }}
-                                draggable="false"
-                                onDragStart={(e) => e.preventDefault()}
+                                className="w-full h-full object-cover"
                                 loading="lazy"
-                                alt="Journal Entry"
+                                alt=""
                             />
-
-                            {/* DOWNLOAD PROTECTION: Invisible Overlay Shield */}
-                            <div className="absolute inset-0 z-10 w-full h-full pointer-events-auto bg-transparent"></div>
-
                             {/* Counter Tag */}
-                            <div className="absolute top-5 left-5 z-20 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none">
+                            <div className="absolute top-5 left-5 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
                                 <span className="text-[10px] font-black text-white">{i + 1}</span>
                             </div>
                         </div>
                     ))}
                 </div>
-                
-                {/* Spacer for mobile scrolling */}
+                {/* Spacer to allow scrolling past the last image on mobile */}
                 <div className="h-32 shrink-0"></div>
             </div>
         </div>
     );
 });
-        function App() {
+
+   function App() {
             
     const [places, setPlaces] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -303,37 +302,23 @@ useEffect(() => {
 }, []);
 
 
-// --- 2. Centralized Icon Management (Safe & Optimized) ---
-useEffect(() => {
-    const rootNode = document.getElementById('root');
-    if (!rootNode || !window.lucide) return;
-
-    // Initial run
-    window.lucide.createIcons();
-
-    const observer = new MutationObserver((mutations) => {
-        // Check if any added nodes actually contain an <i> tag with data-lucide
-        const hasNewIcons = mutations.some(mutation => 
-            Array.from(mutation.addedNodes).some(node => 
-                node.nodeType === 1 && (node.querySelector('[data-lucide]') || node.hasAttribute('data-lucide'))
-            )
-        );
-
-        if (hasNewIcons) {
-            // DISCONNECT to prevent the infinite loop while Lucide modifies the DOM
-            observer.disconnect();
-            
+// --- 2. Centralized Icon Management ---
+useEffect(() => { 
+    const timer = setTimeout(() => {
+        if (window.lucide) {
             window.lucide.createIcons();
-            
-            // RECONNECT after Lucide is done
-            observer.observe(rootNode, { childList: true, subtree: true });
         }
-    });
-
-    observer.observe(rootNode, { childList: true, subtree: true });
-
-    return () => observer.disconnect();
-}, []);
+    }, 100); 
+    return () => clearTimeout(timer);
+}, [
+    displayPlaces, 
+    likes, 
+    comments,
+    isArticleOpen, isFilterOpen, isPlannerOpen, 
+    isSocialExpanded, isAddExpanded, isAddOpen, isFabExpanded,
+    weatherData,    
+    plannerSearch  
+]);
 
 // --- 3. Add Location Verification Map ---
 useEffect(() => {
@@ -703,7 +688,7 @@ const getDeviceType = () => {
         return;
     }
 
-    // High accuracy watcher - matches Testing.html
+    
     const watchId = navigator.geolocation.watchPosition(
         (pos) => {
             const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -1052,6 +1037,8 @@ const displayPlaces = React.useMemo(() => {
     });
 }, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
 
+
+
 const PrivacyModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
@@ -1198,27 +1185,20 @@ const clearSelectedRoute = () => {
                     
                     {/* Standardized Size: w-14 h-14 | Fixed: Always rounded-full */}
                     <button 
-    onClick={() => { setIsEngineOpen(!isEngineOpen); setIsSocialOpen(false); }} 
-    className={`relative w-14 h-14 shadow-xl flex items-center justify-center transition-all duration-500 rounded-full ${ 
-        isEngineOpen ? 'bg-white text-slate-900 border border-slate-100' : 'bg-slate-900 text-white' 
-    }`}
-> 
-    {isEngineOpen ? ( 
-        /* Inline X Icon - Safe for React */
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6 text-red-500">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-    ) : ( 
-        <div className="flex flex-col items-center pointer-events-none"> 
-            {/* Inline Zap Icon - Safe for React */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="yellow" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-yellow-400">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-            </svg>
-            <span className="text-[6px] font-black uppercase mt-0.5">Engine</span> 
-        </div> 
-    )} 
-</button>
+                        onClick={() => { setIsEngineOpen(!isEngineOpen); setIsSocialOpen(false); }}
+                        className={`relative w-14 h-14 shadow-xl flex items-center justify-center transition-all duration-500 rounded-full ${
+                            isEngineOpen ? 'bg-white text-slate-900 border border-slate-100' : 'bg-slate-900 text-white'
+                        }`}
+                    >
+                        {isEngineOpen ? (
+                            <i data-lucide="x" className="w-6 h-6 text-red-500"></i>
+                        ) : (
+                            <div className="flex flex-col items-center pointer-events-none">
+                                <i data-lucide="zap" className="w-5 h-5 text-yellow-400 fill-yellow-400"></i>
+                                <span className="text-[6px] font-black uppercase mt-0.5">Engine</span>
+                            </div>
+                        )}
+                    </button>
                 </div>
             </div>
         </div>
@@ -1414,8 +1394,6 @@ const clearSelectedRoute = () => {
              </div>
             </div>
            ))}
-    
-    
          </div> 
                         
                         
@@ -1434,6 +1412,106 @@ const clearSelectedRoute = () => {
           </div>
                     
 
+                    {isArticleOpen && ViewingArticle && (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setisArticleOpen(false)}></div>
+        <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <img src={ViewingArticle.cover_photo_url} className="h-48 w-full object-cover" />
+            <div className="p-8 overflow-y-auto scrollable-list">
+                <div className="flex justify-between items-start mb-2">
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">{auditLocationName(ViewingArticle.place_name)}</h2>
+                 
+                    <button 
+                        onClick={() => { window.open(ViewingArticle.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${ViewingArticle.latitude},${ViewingArticle.longitude}`, '_blank'); }}
+                        className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
+                    >
+                        <i data-lucide="map-pin" className="w-4 h-4 text-slate-600"></i>
+                    </button>
+                </div>
+
+                <div className="flex items-center justify-between mb-6">
+                    <span className="inline-block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+                        {ViewingArticle.category}
+                    </span>
+                    <button 
+                        onClick={() => handleLike(ViewingArticle.id)} 
+                        className="flex items-center gap-2 group transition-all bg-slate-50 hover:bg-rose-50 px-4 py-2 rounded-2xl border border-slate-100"
+                    >
+                        <i data-lucide="heart" className={`w-4 h-4 ${likes[ViewingArticle.id] ? 'text-rose-500 fill-rose-500' : 'text-slate-300'}`}></i>
+                        <span className="text-xs font-black text-slate-900">{likes[ViewingArticle.id] || 0}</span>
+                    </button>
+                </div>
+
+                <p className="text-slate-600 leading-relaxed mb-10">{ViewingArticle.ai_article}</p>
+
+                <div className="border-t border-slate-100 pt-8">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">
+                        Discussion ({comments[ViewingArticle.id]?.length || 0})
+                    </h4>
+                    
+                    <div className="space-y-4 mb-6">
+                        {comments[ViewingArticle.id]?.map((c, i) => (
+                            <div key={i} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <p className="text-xs text-slate-700 font-semibold mb-2">{c.comment_text}</p>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase">
+                                        {new Date(c.created_at).toLocaleDateString()}
+                                    </span>
+                                    {(c.city || c.country) && (
+                                        <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest">
+                                            {[c.city, c.country].filter(Boolean).join(', ')}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Inline Author Reply */}
+                                {c.reply_text && (
+                                    <div className="mt-4 pt-4 border-t border-slate-200/60">
+                                        <div className="flex items-center gap-1.5 mb-1.5">
+                                            <div className="w-1 h-3 bg-orange-400 rounded-full"></div>
+                                            <span className="text-[8px] font-black text-slate-900 uppercase tracking-tighter">
+                                                Author Response
+                                            </span>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                            <p className="text-[11px] text-slate-600 leading-relaxed italic">
+                                                "{c.reply_text}"
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            value={NewCommentText}
+                            onChange={(e) => setNewCommentText(e.target.value)}
+                            placeholder="Share your thoughts..." 
+                            className="w-full bg-slate-100 border-2 border-transparent focus:border-slate-900 focus:bg-white rounded-2xl px-5 py-4 text-xs font-bold transition-all outline-none pr-12"
+                            onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && NewCommentText.trim()) {
+                                    const text = NewCommentText;
+                                    setNewCommentText('');
+                                    await submitComment(ViewingArticle.id, text);
+                                }
+                            }}
+                        />
+                        <button 
+                            onClick={() => { if(NewCommentText.trim()) submitComment(ViewingArticle.id, NewCommentText); setNewCommentText(''); }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2"
+                        >
+                            <i data-lucide="send" className="w-4 h-4 text-slate-400"></i>
+                        </button>
+                    </div>
+                </div>
+                <button onClick={() => setisArticleOpen(false)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Back to Log</button>
+            </div>
+        </div>
+    </div>
+)}
 
 {/* Route Planner Modal */}
 {isPlannerOpen && (
@@ -1706,7 +1784,13 @@ const clearSelectedRoute = () => {
     </div>
 )}
 
-
+{activeId && (
+    <PhotoGallery 
+        key={activeId} 
+        photos={places.find(p => p.id === activeId)?.album_photos || []} 
+        onClose={() => setActiveId(null)} 
+    />
+)}
 
 <PrivacyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
 
