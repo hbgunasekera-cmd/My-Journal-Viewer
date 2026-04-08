@@ -285,6 +285,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
     status: 'backlog',
     category: 'Waterfall'
     });
+    const [debouncedSearch, setDebouncedSearch] = React.useState("");
     const [weatherData, setWeatherData] = React.useState({});
     const [activeGallery, setActiveGallery] = useState(null); 
     const [activeGalleryId, setActiveGalleryId] = useState(null);
@@ -471,6 +472,13 @@ useEffect(() => {
     return () => clearTimeout(timer);
 }, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
 
+const placesWithDistance = React.useMemo(() => {
+    if (!userCoords) return places;
+    return places.map(p => ({
+        ...p,
+        currentDistance: calculateDistance(userCoords.lat, userCoords.lng, p.latitude, p.longitude)
+    }));
+}, [places, userCoords]);
 
             const fetchPlaces = async () => {
     // Remove the .eq('status', 'done') filter to get everything
@@ -1039,19 +1047,31 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
+React.useEffect(() => {
+    const handler = setTimeout(() => {
+        setDebouncedSearch(searchTerm);
+    }, 300); // 300ms delay
+    return () => clearTimeout(handler);
+}, [searchTerm]);
+
 const displayPlaces = React.useMemo(() => {
     // 1. FILTERING LOGIC
     const filtered = places.filter(place => {
         const matchesStatus = place.status === statusFilter;
         const matchesCategory = filterTag === 'All' || place.category === filterTag;
         
-        const search = (searchTerm || "").toLowerCase();
+        // Use debouncedSearch instead of searchTerm for performance
+        const search = (debouncedSearch || "").toLowerCase();
+        
+        // If there's no search term, don't waste cycles on string operations
+        if (!search) return matchesStatus && matchesCategory;
+
         const name = (place.place_name || "").toLowerCase();
         const district = (place.district || "").toLowerCase();
         const locality = (place.locality || "").toLowerCase();
         const cat = (place.category || "").toLowerCase();
         
-        // Search across all identifying fields
+        // Multi-column search across all identifying fields
         const matchesSearch = name.includes(search) || 
                               district.includes(search) || 
                               locality.includes(search) ||
@@ -1062,18 +1082,28 @@ const displayPlaces = React.useMemo(() => {
 
     // 2. SORTING LOGIC
     return filtered.sort((a, b) => {
-        if (sortBy === 'recent') return b.id - a.id;
+        // Sort by ID (Newest First)
+        if (sortBy === 'recent') {
+            return b.id - a.id;
+        }
 
+        // Sort by Distance (Nearest First)
         if (sortBy === 'distance' && userCoords?.lat && userCoords?.lng) {
+            // Note: If the app remains laggy, consider pre-calculating distances 
+            // outside of the sort function to avoid O(n log n) distance calculations.
             const distA = calculateDistance(userCoords.lat, userCoords.lng, a.latitude, a.longitude);
             const distB = calculateDistance(userCoords.lat, userCoords.lng, b.latitude, b.longitude);
+            
             if (isNaN(distA) || isNaN(distB)) return 0;
             return distA - distB;
         }
 
+        // Default: Alphabetical by Place Name
         return (a.place_name || "").localeCompare(b.place_name || "");
     });
-}, [places, statusFilter, filterTag, searchTerm, sortBy, userCoords]);
+    
+
+}, [places, statusFilter, filterTag, debouncedSearch, sortBy, userCoords]);
 
 
 
