@@ -157,6 +157,8 @@ body.modal-open {
         const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
         
+        
+        
 
 
       const auditLocationName = (name) => {
@@ -313,6 +315,12 @@ function useDebounce(value, delay = 300) {
     const [activeGallery, setActiveGallery] = useState(null); 
     const [activeGalleryId, setActiveGalleryId] = useState(null);
     const [activeId, setActiveId] = useState(null);
+    const nearbyMarkersRef = React.useRef([]);
+    const [toggles, setToggles] = React.useState({
+               lodging: false,
+               gas_station: false,
+               restaurant: false
+          });
     
  
     
@@ -513,56 +521,77 @@ const placesWithDistance = React.useMemo(() => {
     setPlaces(data || []);
 };
 
-const findNearbyAlongRoute = async (type) => {
-    // 1. Check if the route and Google Maps loader exist
-    if (!routingControlRef.current || !window.google?.maps?.importLibrary) {
-        console.error("Routing or Google Maps not initialized");
+const toggleNearby = async (type) => {
+    const isTurningOn = !toggles[type];
+    setToggles(prev => ({ ...prev, [type]: isTurningOn }));
+
+    // If turning OFF: Filter and remove markers of this specific type
+    if (!isTurningOn) {
+        nearbyMarkersRef.current = nearbyMarkersRef.current.filter(item => {
+            if (item.type === type) {
+                mapRef.current.removeLayer(item.marker);
+                return false;
+            }
+            return true;
+        });
         return;
     }
+
+    // If turning ON: Check for route and fetch
+    if (!routingControlRef.current?._selectedRoute) return alert("Please plan a route first!");
     
-    // 2. Get coordinates from the current selected route
-    const selectedRoute = routingControlRef.current._selectedRoute;
-    if (!selectedRoute) return alert("Please calculate a route first!");
-
     try {
-        // 3. IMPORTANT: Explicitly import the places library
         await google.maps.importLibrary("places");
-        
-        // Now google.maps.places is guaranteed to be defined
         const service = new google.maps.places.PlacesService(document.createElement('div'));
-        const coords = selectedRoute.coordinates;
-
-        // 4. Sample points (taking every 10th point to stay within API limits)
-        const sampleRate = Math.max(1, Math.floor(coords.length / 10)); 
+        const coords = routingControlRef.current._selectedRoute.coordinates;
+        
+        // Sample every 15th coordinate to stay within Google API limits
+        const sampleRate = Math.max(1, Math.floor(coords.length / 15)); 
         const pointsToSearch = coords.filter((_, index) => index % sampleRate === 0);
 
-        pointsToSearch.forEach((point) => {
-            const request = {
-                location: new google.maps.LatLng(point.lat, point.lng),
-                radius: '5000', 
-                type: type 
-            };
+        const colors = {
+            lodging: '#3b82f6',    // Blue
+            gas_station: '#eab308', // Yellow
+            restaurant: '#a855f7'  // Purple
+        };
 
-            service.nearbySearch(request, (results, status) => {
+        pointsToSearch.forEach((point) => {
+            service.nearbySearch({
+                location: new google.maps.LatLng(point.lat, point.lng),
+                radius: '5000',
+                type: type
+            }, (results, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK) {
                     results.forEach(place => {
-                        L.marker([place.geometry.location.lat(), place.geometry.location.lng()], {
-                            icon: L.divIcon({
-                                className: 'custom-div-icon',
-                                html: `<div class="bg-white p-2 rounded-full shadow-lg border-2 border-indigo-500">
-                                         <i data-lucide="${type === 'lodging' ? 'hotel' : (type === 'gas_station' ? 'fuel' : 'utensils')}" class="w-4 h-4"></i>
-                                       </div>`
-                            })
+                        const dot = L.circleMarker([place.geometry.location.lat(), place.geometry.location.lng()], {
+                            radius: 6,
+                            fillColor: colors[type],
+                            color: "#fff",
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 1
                         }).addTo(mapRef.current)
                           .bindPopup(`<b>${place.name}</b><br>${place.vicinity}`);
+
+                        nearbyMarkersRef.current.push({ type, marker: dot });
                     });
-                    if (window.lucide) window.lucide.createIcons();
                 }
             });
         });
-    } catch (error) {
-        console.error("Error loading Google Places library:", error);
-    }
+    } catch (e) { console.error(e); }
+};
+
+const handleReset = () => {
+    
+    setPlannerSearch('');
+    setSelectedRoute([]);
+    setRouteDistance(0);
+    
+    nearbyMarkersRef.current.forEach(m => mapRef.current.removeLayer(m.marker));
+    nearbyMarkersRef.current = [];
+    
+    setToggles({ lodging: false, gas_station: false, restaurant: false });
+    
 };
 
 
@@ -1732,9 +1761,7 @@ const clearSelectedRoute = () => {
                                 {selectedRoute.length > 0 && (
                                     <button 
                                         onClick={() => {
-                                            setPlannerSearch('');
-                                            setSelectedRoute([]);
-                                            setRouteDistance(0);
+                                            handleReset();
                                         }}
                                         className="p-1.5 hover:bg-rose-50 rounded-lg transition-colors text-rose-400 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider"
                                     >
@@ -1766,21 +1793,29 @@ const clearSelectedRoute = () => {
                 
                 {/* Add this inside your Planner Modal/Drawer */}
 <div className="flex gap-2 p-4 bg-slate-50 border-t border-slate-100">
+    {/* Hotels Button */}
     <button 
-        onClick={() => findNearbyAlongRoute('lodging')}
-        className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-2"
+        onClick={() => toggleNearby('lodging')}
+        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 flex items-center justify-center gap-2 
+            ${toggles.lodging ? 'bg-blue-500 border-blue-500 text-white shadow-lg shadow-blue-200' : 'bg-white border-slate-100 text-slate-400'}`}
     >
         <i data-lucide="bed" className="w-3 h-3"></i> Hotels
     </button>
+
+    {/* Gas Button */}
     <button 
-        onClick={() => findNearbyAlongRoute('gas_station')}
-        className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-2"
+        onClick={() => toggleNearby('gas_station')}
+        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 flex items-center justify-center gap-2 
+            ${toggles.gas_station ? 'bg-yellow-500 border-yellow-500 text-white shadow-lg shadow-yellow-200' : 'bg-white border-slate-100 text-slate-400'}`}
     >
         <i data-lucide="fuel" className="w-3 h-3"></i> Gas
     </button>
+
+    {/* Food Button */}
     <button 
-        onClick={() => findNearbyAlongRoute('restaurant')}
-        className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-2"
+        onClick={() => toggleNearby('restaurant')}
+        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 flex items-center justify-center gap-2 
+            ${toggles.restaurant ? 'bg-purple-500 border-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-white border-slate-100 text-slate-400'}`}
     >
         <i data-lucide="utensils" className="w-3 h-3"></i> Food
     </button>
