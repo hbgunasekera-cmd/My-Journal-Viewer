@@ -517,21 +517,28 @@ useEffect(() => {
     return () => clearTimeout(timer);
 }, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
 
-// Locate this block in your script (search for "onMapClick")
 React.useEffect(() => {
     if (!mapRef.current) return;
 
     const onMapClick = (e) => {
-        // ... (animation logic)
+        const { lat, lng } = e.latlng;
+        // Call your search logic using the clicked coordinates
+        fetchAttractions(lat, lng); 
+        
+        // Optional: Add a temporary marker to show where you clicked
+        if (tempMarkerRef.current) mapRef.current.removeLayer(tempMarkerRef.current);
+        tempMarkerRef.current = L.circleMarker([lat, lng], {
+            radius: 8,
+            fillColor: "#3b82f6",
+            color: "#fff",
+            weight: 2,
+            fillOpacity: 0.5
+        }).addTo(mapRef.current);
     };
 
     mapRef.current.on('click', onMapClick);
-    
-    // CHANGE THIS RETURN BLOCK:
     return () => {
-        if (mapRef.current) {
-            mapRef.current.off('click', onMapClick);
-        }
+        if (mapRef.current) mapRef.current.off('click', onMapClick);
     };
 }, [mapRef.current]);
 
