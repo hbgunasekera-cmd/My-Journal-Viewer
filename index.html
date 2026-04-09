@@ -517,6 +517,24 @@ useEffect(() => {
     return () => clearTimeout(timer);
 }, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
 
+// Locate this block in your script (search for "onMapClick")
+React.useEffect(() => {
+    if (!mapRef.current) return;
+
+    const onMapClick = (e) => {
+        // ... (animation logic)
+    };
+
+    mapRef.current.on('click', onMapClick);
+    
+    // CHANGE THIS RETURN BLOCK:
+    return () => {
+        if (mapRef.current) {
+            mapRef.current.off('click', onMapClick);
+        }
+    };
+}, [mapRef.current]);
+
 const placesWithDistance = React.useMemo(() => {
     if (!userCoords) return places;
     return places.map(p => ({
@@ -848,7 +866,7 @@ const getDeviceType = () => {
             if (!userCoords) setUserCoords(DEFAULT_LOCATION);
         },
         { 
-            enableHighAccuracy: true, // REQUIRED FOR ACCURACY
+            enableHighAccuracy: true, 
             timeout: 10000, 
             maximumAge: 0 
         }
@@ -905,47 +923,66 @@ const getDeviceType = () => {
 };
 
 const fetchAttractions = async (lat, lng) => {
-    // 1. Validation Guard: Ensure coordinates are numbers
-    if (isNaN(lat) || isNaN(lng)) {
-        console.warn("Invalid coordinates provided to fetchAttractions");
-        return;
-    }
+    if (isNaN(lat) || isNaN(lng)) return;
 
     try {
-        // 2. Ensure Places Library is loaded
         const { PlacesService, PlacesServiceStatus } = await google.maps.importLibrary("places");
-        
-        // 3. Use a persistent div for the service to avoid re-creation errors
         if (!window.placesService) {
             window.placesService = new PlacesService(document.createElement('div'));
         }
 
-        const request = {
+        window.placesService.nearbySearch({
             location: new google.maps.LatLng(lat, lng),
             radius: 5000,
-            // Using a single string or array of strings as per Google Spec
-            type: 'tourist_attraction' 
-        };
-
-        window.placesService.nearbySearch(request, (results, status) => {
+            type: 'tourist_attraction'
+        }, (results, status) => {
             if (status === PlacesServiceStatus.OK) {
-                const suggestions = results.slice(0, 8).map(place => ({
+                setNearbyAttractions(results.slice(0, 8).map(place => ({
                     id: place.place_id,
                     name: place.name,
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
                     image: place.photos ? place.photos[0].getUrl({ maxWidth: 400, maxHeight: 300 }) : 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png',
-                    rating: place.rating,
-                    vicinity: place.vicinity
-                }));
-                setNearbyAttractions(suggestions);
-            } else if (status === PlacesServiceStatus.ZERO_RESULTS) {
-                setNearbyAttractions([]); // Clear if nothing found
+                    rating: place.rating
+                })));
             } else {
-                console.error("Places Service Error:", status);
+                setNearbyAttractions([]);
             }
         });
-    } catch (e) {
-        console.error("Failed to load Google Places library:", e);
-    }
+    } catch (e) { console.error(e); }
+};
+
+
+const handleSelectSuggestion = (attr) => {
+    // 1. Convert attraction to your app's location format
+    const newLocation = {
+        id: attr.id,
+        place_name: attr.name,
+        latitude: attr.lat, // Note: Ensure your fetchAttractions stores these
+        longitude: attr.lng
+    };
+
+    // 2. Add to route
+    setSelectedRoute(prev => {
+        if (prev.find(p => p.id === newLocation.id)) return prev;
+        return [...prev, newLocation];
+    });
+
+    // 3. Open the planner so the user sees the new route
+    setIsPlannerOpen(true);
+};
+
+const shareRoute = () => {
+    if (selectedRoute.length < 2) return;
+
+    const origin = `${selectedRoute[0].latitude},${selectedRoute[0].longitude}`;
+    const destination = `${selectedRoute[selectedRoute.length - 1].latitude},${selectedRoute[selectedRoute.length - 1].longitude}`;
+    const waypoints = selectedRoute.slice(1, -1)
+        .map(p => `${p.latitude},${p.longitude}`)
+        .join('|');
+
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+    window.open(url, '_blank');
 };
 
 
@@ -1792,245 +1829,168 @@ const clearSelectedRoute = () => {
         {/* Modal Container */}
         <div className="relative bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col md:flex-row">
             
-            {/* Left Side: Map Widget */}
-            {/* Note: Map initialization logic should prepend userCoords to waypoints in your useEffect */}
-            <div className="h-[35vh] md:h-full md:w-2/3 bg-slate-100 relative z-0" id="planner-map"></div>
+            {/* Left Side: Map Widget - Reduced width to 60% to give selection panel more breathing room */}
+            <div className="h-[30vh] md:h-full md:w-[60%] bg-slate-100 relative z-0 shrink-0" id="planner-map"></div>
 
-            {/* Right Side: Selection Panel */}
-            <div className="flex-1 flex flex-col h-[65vh] md:h-full bg-white z-10 border-t md:border-t-0 md:border-l border-slate-100">
+            {/* Right Side: Selection Panel - Increased width and added containment */}
+            <div className="flex-1 flex flex-col min-w-0 bg-white z-10 border-t md:border-t-0 md:border-l border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] md:shadow-none rounded-t-[2rem] md:rounded-t-none -mt-6 md:mt-0 overflow-hidden">
                 
-                {/* Header Section */}
-                <div className="p-6 border-b border-slate-100 bg-white shrink-0">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <h2 className="text-xl font-black uppercase tracking-tighter italic text-slate-900">Route Planner</h2>
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md">
+                {/* 1. Header Section */}
+                <div className="p-5 pb-3 border-b border-slate-100 bg-white shrink-0">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="min-w-0">
+                            <h2 className="text-lg font-black uppercase tracking-tighter italic text-slate-900 leading-none truncate">Route Planner</h2>
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-lg">
                                     {selectedRoute.length} Stops
                                 </span>
-
                                 {selectedRoute.length > 0 && routeDistance > 0 && (
-                                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md border border-blue-100 flex items-center gap-1">
-                                        <i data-lucide="navigation" className="w-3 h-3"></i>
+                                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 flex items-center gap-1">
+                                        <i data-lucide="navigation" className="w-2.5 h-2.5"></i>
                                         {routeDistance} KM
                                     </span>
                                 )}
-                                
-                                {selectedRoute.length > 0 && (
-                                    <button 
-                                        onClick={() => {
-                                            handleReset();
-                                        }}
-                                        className="p-1.5 hover:bg-rose-50 rounded-lg transition-colors text-rose-400 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider"
-                                    >
-                                        <i data-lucide="refresh-cw" className="w-3 h-3"></i>
-                                        Reset
-                                    </button>
-                                )}
                             </div>
                         </div>
-                        <button 
-                            onClick={() => setIsPlannerOpen(false)} 
-                            className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center transition-all"
-                        >
-                            <i data-lucide="x" className="w-5 h-5 text-slate-600"></i>
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                             {selectedRoute.length > 0 && (
+                                <button onClick={handleReset} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-500 rounded-full active:rotate-180 transition-transform duration-500">
+                                    <i data-lucide="refresh-cw" className="w-4 h-4"></i>
+                                </button>
+                            )}
+                            <button onClick={() => setIsPlannerOpen(false)} className="w-8 h-8 bg-slate-900 text-white rounded-full flex items-center justify-center">
+                                <i data-lucide="x" className="w-4 h-4"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <div className="relative">
                         <i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
                         <input 
                             type="text"
-                            placeholder="Filter by name or category..."
+                            placeholder="Find a place..."
                             value={plannerSearch}
                             onChange={(e) => setPlannerSearch(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 pl-11 pr-4 text-[10px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all"/>
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl py-2.5 pl-11 pr-4 text-[11px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all"/>
                     </div>
-                                        
                 </div>
-                
-                {/* Hotels/Gas Stations/Resturants */}
-                
-<div className="flex gap-2 p-4 bg-slate-50 border-t border-slate-100">
-    {/* Hotels Button */}
-    <button 
-        onClick={() => toggleNearby('lodging')}
-        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 flex items-center justify-center gap-2 
-            ${toggles.lodging ? 'bg-blue-500 border-blue-500 text-white shadow-lg shadow-blue-200' : 'bg-white border-slate-100 text-slate-400'}`}
-    >
-        <i data-lucide="bed" className="w-3 h-3"></i> Hotels
-    </button>
 
-    {/* Gas Button */}
-    <button 
-        onClick={() => toggleNearby('gas_station')}
-        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 flex items-center justify-center gap-2 
-            ${toggles.gas_station ? 'bg-yellow-500 border-yellow-500 text-white shadow-lg shadow-yellow-200' : 'bg-white border-slate-100 text-slate-400'}`}
-    >
-        <i data-lucide="fuel" className="w-3 h-3"></i> Fuel
-    </button>
-
-    {/* Food Button */}
-    <button 
-        onClick={() => toggleNearby('restaurant')}
-        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 flex items-center justify-center gap-2 
-            ${toggles.restaurant ? 'bg-purple-500 border-purple-500 text-white shadow-lg shadow-purple-200' : 'bg-white border-slate-100 text-slate-400'}`}
-    >
-        <i data-lucide="utensils" className="w-3 h-3"></i> Restaurant
-    </button>
-</div>
-                
-                
-
-      {/* SCROLLABLE LOCATION LIST */}
-                
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-white">
-                    {(() => {
-                        // 1. Filter and Calculate Distance from Device
-                        let filtered = places.filter(place => {
-                            const name = (place.place_name || "").toLowerCase();
-                            const cat = (place.category || "").toLowerCase();
-                            const search = (plannerSearch || "").toLowerCase();
-                            return (place.status === 'done' || place.status === 'pending') && (name.includes(search) || cat.includes(search));
-                        }).map(place => {
-                            // Calculate distance from device location
-                            const dist = userCoords ? calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude) : Infinity;
-                            return { ...place, calculatedDistance: dist };
-                        });
-
-                        // 2. Sort by Nearest (Fix: Nearest on Top)
-                        filtered.sort((a, b) => a.calculatedDistance - b.calculatedDistance);
-
-                        if (filtered.length === 0) {
-                            return (
-                                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
-                                    <i data-lucide="map-pin-off" className="w-8 h-8 mb-2 opacity-20"></i>
-                                    <span className="text-[10px] font-bold uppercase tracking-widest">No locations found</span>
-                                </div>
-                            );
-                        }
-
-                        // 3. Render Cards
-                        return filtered.map(place => {
-                            const isSelected = selectedRoute.find(p => p.id === place.id);
-                            const weather = weatherData[place.place_name];
-                            
-                            return (
-                                <div 
-                                    key={place.id} 
-                                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer group ${
-                                        isSelected 
-                                            ? 'border-slate-900 bg-slate-50' 
-                                            : 'border-slate-100 bg-white hover:border-indigo-200'
-                                    }`}
-                                >
-                                    <div className="flex flex-col min-w-0 pr-2 flex-1" onClick={() => toggleRoutePlace(place)}>
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full shrink-0 ${place.status === 'pending' ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
-                                            <span className="text-[10px] font-black uppercase truncate text-slate-900">
-                                                {place.place_name}
-                                            </span>
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[8px] font-bold uppercase truncate text-slate-400">
-                                                {place.category} • {place.district}
-                                            </span>
-                                            {/* Distance Badge */}
-                                            {place.calculatedDistance !== Infinity && (
-                                                <span className="text-[7px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                                                    {place.calculatedDistance.toFixed(1)} km away
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* WEATHER INTEGRATION */}
-<div className="min-h-[26px]">
-    {weather ? (
-        <div className="flex items-center gap-2 mt-2">
-            {/* Current Condition (Now) */}
-            <div className="flex items-center gap-1.5 bg-blue-50/50 px-2 py-0.5 rounded-lg border border-blue-100/50">
-                <WeatherIcon condition={weather.currentCond} />
-                <div className="flex flex-col leading-none">
-                    <span className="text-[6px] font-black text-blue-400 uppercase tracking-tighter">Now</span>
-                    <span className="text-[9px] font-bold text-blue-700">{weather.current}°C</span>
+                {/* 2. Utility Toggles */}
+                <div className="flex gap-2 p-3 bg-white border-b border-slate-50 overflow-x-auto no-scrollbar shrink-0">
+                    {[
+                        { id: 'lodging', label: 'Hotels', icon: 'bed', color: 'bg-blue-500' },
+                        { id: 'gas_station', label: 'Fuel', icon: 'fuel', color: 'bg-yellow-500' },
+                        { id: 'restaurant', label: 'Food', icon: 'utensils', color: 'bg-purple-500' }
+                    ].map(type => (
+                        <button 
+                            key={type.id}
+                            onClick={() => toggleNearby(type.id)}
+                            className={`flex-1 min-w-[90px] py-2 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center justify-center gap-2 
+                                ${toggles[type.id] ? `${type.color} border-transparent text-white shadow-md` : 'bg-white border-slate-100 text-slate-400'}`}
+                        >
+                            <i data-lucide={type.icon} className="w-3 h-3"></i> {type.label}
+                        </button>
+                    ))}
                 </div>
-            </div>
 
-            {/* Tomorrow's Forecast (24H) */}
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
-                <div className="flex flex-col leading-none">
-                    <span className="text-[6px] font-black text-slate-400 uppercase tracking-tighter">24H</span>
-                    <span className="text-[9px] font-bold text-slate-600">{weather.nextDay}°C</span>
-                </div>
-                <span className="text-[7px] text-slate-400 font-bold uppercase tracking-tight border-l border-slate-200 pl-1.5">
-                    {weather.nextCond}
-                </span>
-            </div>
-        </div>
-    ) : (
-        <div className="mt-2 flex gap-2">
-            <div className="h-[22px] w-14 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
-            <div className="h-[22px] w-20 bg-slate-50 animate-pulse rounded-lg border border-slate-100/50"></div>
-        </div>
-    )}
-</div>
-                                    </div>
-                                    
-                                    <button 
-                                        onClick={() => toggleRoutePlace(place)}
-                                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
-                                            isSelected 
-                                                ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' 
-                                                : 'bg-slate-100 text-slate-400 hover:bg-indigo-500 hover:text-white'
-                                        }`}
+                {/* 3. Main Scrollable List Area */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+                    {/* Nearby Attractions */}
+                    {nearbyAttractions.length > 0 && (
+                        <div className="p-4 bg-indigo-50/30 border-b border-indigo-100/50">
+                            <div className="flex justify-between items-center mb-3">
+                                <h4 className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Nearby Gems</h4>
+                                <button onClick={() => setNearbyAttractions([])} className="text-[8px] font-black text-rose-400 uppercase">Dismiss</button>
+                            </div>
+                            <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar scroll-smooth">
+                                {nearbyAttractions.map((attr) => (
+                                    <div 
+                                        key={attr.id} 
+                                        onClick={() => handleSelectSuggestion(attr)}
+                                        className="min-w-[130px] bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 active:scale-95 transition-transform"
                                     >
-                                        <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
-                                    </button>
-                                </div>
-                            );
-                        });
-                    })()}
-                </div>
-                
-                {nearbyAttractions.length > 0 && (
-    <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100">
-        <div className="flex justify-between items-center mb-2">
-            <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Nearby Gems</h4>
-            <button onClick={() => setNearbyAttractions([])} className="text-[8px] font-bold text-rose-500 uppercase">Dismiss</button>
-        </div>
-        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar scroll-smooth">
-            {nearbyAttractions.map((attr) => (
-                <div key={attr.id} className="min-w-[140px] w-[140px] bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
-                    <img src={attr.image} className="h-20 w-full object-cover" />
-                    <div className="p-2">
-                        <h5 className="text-[10px] font-bold text-slate-800 line-clamp-1">{attr.name}</h5>
-                        <div className="flex items-center gap-1 mt-1">
-                            <span className="text-[8px] font-black text-amber-500">★ {attr.rating || 'N/A'}</span>
+                                        <img src={attr.image} className="h-16 w-full object-cover" />
+                                        <div className="p-2">
+                                            <h5 className="text-[9px] font-black text-slate-800 line-clamp-1">{attr.name}</h5>
+                                            <span className="text-[8px] font-bold text-amber-500">★ {attr.rating || 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
+                    )}
+
+                    {/* Location Cards */}
+                    <div className="p-4 space-y-2">
+                        {(() => {
+                            let filtered = places.filter(place => {
+                                const search = (plannerSearch || "").toLowerCase();
+                                return (place.status === 'done' || place.status === 'pending') && 
+                                       (place.place_name.toLowerCase().includes(search) || place.category.toLowerCase().includes(search));
+                            }).map(place => ({
+                                ...place,
+                                dist: userCoords ? calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude) : Infinity
+                            })).sort((a, b) => a.dist - b.dist);
+
+                            if (filtered.length === 0) return (
+                                <div className="text-center py-10 opacity-30 text-[10px] font-black uppercase tracking-widest">No Matches</div>
+                            );
+
+                            return filtered.map(place => {
+                                const isSelected = selectedRoute.find(p => p.id === place.id);
+                                const weather = weatherData[place.place_name];
+                                return (
+                                    <div key={place.id} className={`flex items-center p-3 rounded-2xl border transition-all ${isSelected ? 'border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500/20' : 'border-slate-100 bg-white'}`}>
+                                        <div className="flex-1 min-w-0 pr-2" onClick={() => toggleRoutePlace(place)}>
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${place.status === 'pending' ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                                                <span className="text-[10px] font-black uppercase truncate text-slate-900">{place.place_name}</span>
+                                            </div>
+                                            
+                                            <div className="flex flex-col gap-1.5 mt-2">
+                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">{place.category} • {place.dist.toFixed(1)} km</span>
+                                                
+                                                {/* Two Weather Badges: Current and Next Day */}
+                                                {weather && (
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        <div className="flex items-center gap-1 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md">
+                                                            <span className="text-[7px] font-black text-blue-400 uppercase">Now</span>
+                                                            <span className="text-[8px] font-black text-blue-600 uppercase">{weather.current}°C</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md">
+                                                            <span className="text-[7px] font-black text-indigo-400 uppercase">Tmrw</span>
+                                                            <span className="text-[8px] font-black text-indigo-600 uppercase">{weather.nextDay}°C</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button onClick={() => toggleRoutePlace(place)} className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                            <i data-lucide={isSelected ? "minus" : "plus"} className="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                );
+                            });
+                        })()}
                     </div>
                 </div>
-            ))}
-        </div>
-    </div>
-)}
 
-                {/* Footer Action */}
-                <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0">
+                {/* 4. Footer Actions */}
+                <div className="p-4 border-t border-slate-100 bg-white shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
                     <div className="flex gap-2">
                         <button 
-                            onClick={() => {
-                                if (selectedRoute.length === 0) return;
-                                // Calls the function where QRCode.CorrectLevel.H fix was applied
-                                showQRCode(selectedRoute, "Expedition Route");
-                            }}
-                            disabled={selectedRoute.length === 0}
-                            className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-[0.95] ${
-                                selectedRoute.length > 0 ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800' : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                            }`}
+                            onClick={shareRoute}
+                            disabled={selectedRoute.length < 2}
+                            className={`flex-1 py-3.5 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all ${selectedRoute.length >= 2 ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'hidden'}`}
                         >
-                            <i data-lucide="qr-code" className="w-4 h-4"></i>
-                            Generate QR & Share
+                            <i data-lucide="share-2" className="w-3.5 h-3.5"></i> Share
+                        </button>
+                        <button 
+                            onClick={() => selectedRoute.length > 0 && showQRCode(selectedRoute, "My Route")}
+                            disabled={selectedRoute.length === 0}
+                            className={`flex-[2] py-3.5 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-95 ${selectedRoute.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'bg-slate-100 text-slate-300'}`}
+                        >
+                            <i data-lucide="qr-code" className="w-3.5 h-3.5"></i> Generate Route QR
                         </button>
                     </div>
                 </div>
@@ -2038,6 +1998,8 @@ const clearSelectedRoute = () => {
         </div>
     </div>
 )}
+
+{/* Add Location to the Database */}
 
 {isAddOpen && (
     <div className="fixed inset-0 bg-white z-[3000] flex flex-col lg:flex-row animate-in fade-in duration-300">
