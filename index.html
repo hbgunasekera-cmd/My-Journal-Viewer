@@ -513,6 +513,57 @@ const placesWithDistance = React.useMemo(() => {
     setPlaces(data || []);
 };
 
+const findNearbyAlongRoute = async (type) => {
+    // 1. Check if the route and Google Maps loader exist
+    if (!routingControlRef.current || !window.google?.maps?.importLibrary) {
+        console.error("Routing or Google Maps not initialized");
+        return;
+    }
+    
+    // 2. Get coordinates from the current selected route
+    const selectedRoute = routingControlRef.current._selectedRoute;
+    if (!selectedRoute) return alert("Please calculate a route first!");
+
+    try {
+        // 3. IMPORTANT: Explicitly import the places library
+        await google.maps.importLibrary("places");
+        
+        // Now google.maps.places is guaranteed to be defined
+        const service = new google.maps.places.PlacesService(document.createElement('div'));
+        const coords = selectedRoute.coordinates;
+
+        // 4. Sample points (taking every 10th point to stay within API limits)
+        const sampleRate = Math.max(1, Math.floor(coords.length / 10)); 
+        const pointsToSearch = coords.filter((_, index) => index % sampleRate === 0);
+
+        pointsToSearch.forEach((point) => {
+            const request = {
+                location: new google.maps.LatLng(point.lat, point.lng),
+                radius: '5000', 
+                type: type 
+            };
+
+            service.nearbySearch(request, (results, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK) {
+                    results.forEach(place => {
+                        L.marker([place.geometry.location.lat(), place.geometry.location.lng()], {
+                            icon: L.divIcon({
+                                className: 'custom-div-icon',
+                                html: `<div class="bg-white p-2 rounded-full shadow-lg border-2 border-indigo-500">
+                                         <i data-lucide="${type === 'lodging' ? 'hotel' : (type === 'gas_station' ? 'fuel' : 'utensils')}" class="w-4 h-4"></i>
+                                       </div>`
+                            })
+                        }).addTo(mapRef.current)
+                          .bindPopup(`<b>${place.name}</b><br>${place.vicinity}`);
+                    });
+                    if (window.lucide) window.lucide.createIcons();
+                }
+            });
+        });
+    } catch (error) {
+        console.error("Error loading Google Places library:", error);
+    }
+};
 
 
 // 2. Weather Fetching Logic (Optimized for Speed)
@@ -1708,10 +1759,34 @@ const clearSelectedRoute = () => {
                             placeholder="Filter by name or category..."
                             value={plannerSearch}
                             onChange={(e) => setPlannerSearch(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 pl-11 pr-4 text-[10px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all"
-                        />
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 pl-11 pr-4 text-[10px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all"/>
                     </div>
+                                        
                 </div>
+                
+                {/* Add this inside your Planner Modal/Drawer */}
+<div className="flex gap-2 p-4 bg-slate-50 border-t border-slate-100">
+    <button 
+        onClick={() => findNearbyAlongRoute('lodging')}
+        className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-2"
+    >
+        <i data-lucide="bed" className="w-3 h-3"></i> Hotels
+    </button>
+    <button 
+        onClick={() => findNearbyAlongRoute('gas_station')}
+        className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-2"
+    >
+        <i data-lucide="fuel" className="w-3 h-3"></i> Gas
+    </button>
+    <button 
+        onClick={() => findNearbyAlongRoute('restaurant')}
+        className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-2"
+    >
+        <i data-lucide="utensils" className="w-3 h-3"></i> Food
+    </button>
+</div>
+                
+                
 
                 {/* SCROLLABLE LOCATION LIST */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-white">
