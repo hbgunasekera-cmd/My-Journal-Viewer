@@ -465,11 +465,11 @@ useEffect(() => {
         
         // --- UPDATED CLICK HANDLER ---
         marker.on('click', () => {
-            setHoveredPlaceId(place.id);
-            // Trigger the nearby attraction search
-            fetchAttractions(place.latitude, place.longitude);
-        });
-
+          setHoveredPlaceId(place.id);    
+          const lat = parseFloat(place.latitude);
+          const lng = parseFloat(place.longitude);
+          fetchAttractions(lat, lng);
+      });
         markerRegistryRef.current[place.id] = marker;
     } else {
         const marker = markerRegistryRef.current[place.id];
@@ -905,15 +905,29 @@ const getDeviceType = () => {
 };
 
 const fetchAttractions = async (lat, lng) => {
-    try {
-        const { PlacesService, PlacesServiceStatus } = await google.maps.importLibrary("places");
-        const service = new PlacesService(document.createElement('div'));
+    // 1. Validation Guard: Ensure coordinates are numbers
+    if (isNaN(lat) || isNaN(lng)) {
+        console.warn("Invalid coordinates provided to fetchAttractions");
+        return;
+    }
 
-        service.nearbySearch({
+    try {
+        // 2. Ensure Places Library is loaded
+        const { PlacesService, PlacesServiceStatus } = await google.maps.importLibrary("places");
+        
+        // 3. Use a persistent div for the service to avoid re-creation errors
+        if (!window.placesService) {
+            window.placesService = new PlacesService(document.createElement('div'));
+        }
+
+        const request = {
             location: new google.maps.LatLng(lat, lng),
             radius: 5000,
-            type: ['tourist_attraction']
-        }, (results, status) => {
+            // Using a single string or array of strings as per Google Spec
+            type: 'tourist_attraction' 
+        };
+
+        window.placesService.nearbySearch(request, (results, status) => {
             if (status === PlacesServiceStatus.OK) {
                 const suggestions = results.slice(0, 8).map(place => ({
                     id: place.place_id,
@@ -923,9 +937,15 @@ const fetchAttractions = async (lat, lng) => {
                     vicinity: place.vicinity
                 }));
                 setNearbyAttractions(suggestions);
+            } else if (status === PlacesServiceStatus.ZERO_RESULTS) {
+                setNearbyAttractions([]); // Clear if nothing found
+            } else {
+                console.error("Places Service Error:", status);
             }
         });
-    } catch (e) { console.error("Places Search Failed", e); }
+    } catch (e) {
+        console.error("Failed to load Google Places library:", e);
+    }
 };
 
 
