@@ -1678,7 +1678,7 @@ const clearSelectedRoute = () => {
 )}
 
          {/* Action Buttons Container */}
-<div className="grid grid-cols-4 gap-2 mt-auto pt-4 border-t border-slate-100/60">
+<div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
     
     {/* MAPS BUTTON - Soft Slate */}
     {place.google_maps_url && (
@@ -1708,7 +1708,9 @@ const clearSelectedRoute = () => {
         </button>
     )}
     
-    {/* VIDEO BUTTON - Soft Rose/Red */}
+        
+    {/* VIDEO BUTTON - Soft Rose/Red
+    Deactivated/Commented Out:
     {place.tiktok_urls && place.tiktok_urls.length > 0 && (
         <button 
             onClick={() => setActiveVideoId(place.id)}
@@ -1718,7 +1720,10 @@ const clearSelectedRoute = () => {
             <i data-lucide="play" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
             <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Videos</span>
         </button>
-    )}
+    )} 
+*/}
+    
+   
     
     {/* READ BUTTON - Soft Emerald */}
     {place.ai_article?.story && (
