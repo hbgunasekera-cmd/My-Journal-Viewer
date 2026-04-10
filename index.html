@@ -15,7 +15,8 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>   
+    <script src="https://unpkg.com/lucide@latest"></script> 
+    <script async src="https://www.tiktok.com/embed.js"></script>
     
     
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
@@ -157,10 +158,6 @@ body.modal-open {
         const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
         const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
         
-        
-        
-
-
       const auditLocationName = (name) => {
     if (!name) return "Unnamed Location";
         return String(name)
@@ -253,6 +250,67 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
     );
 });
 
+const VideoGallery = React.memo(({ videos, onClose }) => {
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        if (window.lucide) window.lucide.createIcons();
+        return () => { document.body.style.overflow = 'unset'; };
+    }, []);
+
+    const getTikTokId = (url) => {
+        if (!url || typeof url !== 'string') return null;
+        const matches = url.match(/\/video\/(\d+)/);
+        return matches ? matches[1] : null;
+    };
+
+    // --- DATA AUDIT & FIX ---
+    // 1. Ensure it's an array.
+    // 2. Flatten any strings that contain commas (like your sample: ["url1,url2"])
+    const videoList = (Array.isArray(videos) ? videos : [videos])
+        .flatMap(item => (typeof item === 'string' ? item.split(',') : item))
+        .map(s => s.trim())
+        .filter(s => s !== "");
+
+    if (videoList.length === 0) return null;
+
+    return (
+        <div className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
+                <div>
+                    <h3 className="text-white font-black uppercase tracking-widest text-xs">Video Journal</h3>
+                    <p className="text-[10px] text-indigo-400 font-bold uppercase">{videoList.length} Video Clips Found</p>
+                </div>
+                <button onClick={onClose} className="w-12 h-12 flex items-center justify-center bg-gray/10 hover:bg-rose-500 text-gray rounded-full transition-all">
+                    <i data-lucide="x" className="w-6 h-6"></i>
+                </button>
+            </div>
+
+            {/* Video Grid */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar">
+                <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {videoList.map((url, i) => {
+                        const videoId = getTikTokId(url);
+                        if (!videoId) return null;
+                        return (
+                            <div key={i} className="relative aspect-[9/16] rounded-[2rem] overflow-hidden bg-black border border-white/10 shadow-2xl group transition-transform hover:scale-[1.02]">
+                                <iframe
+                                    src={`https://www.tiktok.com/embed/v2/${videoId}`}
+                                    className="w-full h-full border-0"
+                                    allow="autoplay; encrypted-media"
+                                    allowFullScreen
+                                    loading="lazy"
+                                ></iframe>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="h-24"></div>
+            </div>
+        </div>
+    );
+});
+
 function useDebounce(value, delay = 300) {
     const [debouncedValue, setDebouncedValue] = React.useState(value);
     React.useEffect(() => {
@@ -314,6 +372,7 @@ function useDebounce(value, delay = 300) {
     const [weatherData, setWeatherData] = React.useState({});
     const [activeGallery, setActiveGallery] = useState(null); 
     const [activeGalleryId, setActiveGalleryId] = useState(null);
+    const [activeVideoId, setActiveVideoId] = useState(null);
     const [activeId, setActiveId] = useState(null);
     const nearbyMarkersRef = React.useRef([]);
     const [toggles, setToggles] = React.useState({
@@ -322,6 +381,7 @@ function useDebounce(value, delay = 300) {
                restaurant: false
           });
     const [nearbyAttractions, setNearbyAttractions] = React.useState([]);
+    
     
  
     
@@ -1617,55 +1677,63 @@ const clearSelectedRoute = () => {
     </div>
 )}
 
-            {/* Action Buttons */}
-<div className="grid grid-cols-3 gap-2.5 mt-auto pt-4 border-t border-slate-100/60">
+         {/* Action Buttons Container */}
+<div className="grid grid-cols-4 gap-2 mt-auto pt-4 border-t border-slate-100/60">
+    
     {/* MAPS BUTTON - Soft Slate */}
     {place.google_maps_url && (
         <button 
             onClick={() => window.open(place.google_maps_url, '_blank')}
-            className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-80 transition-all outline-none select-none border border-transparent"
+            className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all outline-none select-none border border-slate-100/50 group"
+            title="Open in Maps"
         >
-            <i data-lucide="map" className="w-3.5 h-3.5"></i>
-            <span className="text-[8px] font-extrabold uppercase mt-1 tracking-tight">Maps</span>
+            <i data-lucide="map" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
         </button>
     )}
     
-    {/* ALBUM BUTTON - Soft Orange */}
-    {place.photo_album_url && (
-     <button onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setActiveId(place.id); 
-    }}
-    className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-80 transition-all outline-none select-none border border-transparent"
+    {/* GALLERY BUTTON - Soft Orange */}
+    {place.album_photos && (
+        <button 
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveId(place.id); 
+            }}
+            className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-90 transition-all outline-none select-none border border-orange-100/50 group"
+            title="View Photos"
         >
-    <i data-lucide="image" className="w-3.5 h-3.5"></i>
-            <span className="text-[8px] font-extrabold uppercase mt-1 tracking-tight">Gallery
-            </span>
-     </button>
-
+            <i data-lucide="image" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
+        </button>
+    )}
+    
+    {/* VIDEO BUTTON - Soft Rose/Red */}
+    {place.tiktok_urls && place.tiktok_urls.length > 0 && (
+        <button 
+            onClick={() => setActiveVideoId(place.id)}
+            className="flex flex-col items-center justify-center py-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 active:scale-90 transition-all outline-none select-none border border-rose-100/50 group"
+            title="Watch TikToks"
+        >
+            <i data-lucide="play" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Videos</span>
+        </button>
     )}
     
     {/* READ BUTTON - Soft Emerald */}
-{place.ai_article && 
- typeof place.ai_article === 'object' && 
- place.ai_article.story && (
-    <button 
-        onClick={() => { 
-            // Ensure the state setters match your Modal logic
-            if (typeof setViewingArticle === 'function') setViewingArticle(place); 
-            if (typeof setisArticleOpen === 'function') setisArticleOpen(true); 
-        }}
-        className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
-        title="Read Travel Journal"
-    >
-        <i 
-            data-lucide="book-open" 
-            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"
-        ></i>
-        <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
-    </button>
-)}
+    {place.ai_article?.story && (
+        <button 
+            onClick={() => { 
+                if (typeof setViewingArticle === 'function') setViewingArticle(place); 
+                if (typeof setisArticleOpen === 'function') setisArticleOpen(true); 
+            }}
+            className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
+            title="Read Story"
+        >
+            <i data-lucide="book-open" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
+        </button>
+    )}
 </div>
              </div>
             </div>
@@ -2079,6 +2147,14 @@ const clearSelectedRoute = () => {
         key={activeId} 
         photos={places.find(p => p.id === activeId)?.album_photos || []} 
         onClose={() => setActiveId(null)} 
+    />
+)}
+
+{activeVideoId && (
+    <VideoGallery 
+        key={activeVideoId} 
+        videos={places.find(p => p.id === activeVideoId)?.tiktok_urls || []} 
+        onClose={() => setActiveVideoId(null)} 
     />
 )}
 
