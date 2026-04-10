@@ -668,9 +668,9 @@ const toggleNearby = async (type) => {
         const pointsToSearch = coords.filter((_, index) => index % sampleRate === 0);
 
         const colors = {
-            lodging: '#3b82f6',    // Blue
+            lodging: '#3b82f6',     // Blue
             gas_station: '#eab308', // Yellow
-            restaurant: '#a855f7'  // Purple
+            restaurant: '#a855f7'   // Purple
         };
 
         pointsToSearch.forEach((point) => {
@@ -681,17 +681,36 @@ const toggleNearby = async (type) => {
             }, (results, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK) {
                     results.forEach(place => {
-                        const dot = L.circleMarker([place.geometry.location.lat(), place.geometry.location.lng()], {
-                            radius: 6,
-                            fillColor: colors[type],
-                            color: "#fff",
-                            weight: 2,
-                            opacity: 1,
-                            fillOpacity: 1
-                        }).addTo(mapRef.current)
-                          .bindPopup(`<b>${place.name}</b><br>${place.vicinity}`);
+                        // QUALITY FILTER LOGIC
+                        // Define thresholds: 4.0+ rating and at least 20 reviews
+                        const isHighQuality = place.rating >= 4.0 && (place.user_ratings_total || 0) >= 20;
+                        const needsFiltering = type === 'restaurant' || type === 'lodging';
 
-                        nearbyMarkersRef.current.push({ type, marker: dot });
+                        // Only proceed if it's a "utility" (gas) OR if it meets the quality bar
+                        if (!needsFiltering || isHighQuality) {
+                            const dot = L.circleMarker([place.geometry.location.lat(), place.geometry.location.lng()], {
+                                radius: 6,
+                                fillColor: colors[type],
+                                color: "#fff",
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 1
+                            }).addTo(mapRef.current)
+                              .bindPopup(`
+                                <div class="p-1">
+                                    <b class="text-slate-900">${place.name}</b><br>
+                                    <span class="text-xs text-slate-500">${place.vicinity}</span>
+                                    ${place.rating ? `
+                                        <div class="flex items-center mt-1 gap-1">
+                                            <span class="text-amber-500 text-xs font-bold">★ ${place.rating}</span>
+                                            <span class="text-[10px] text-slate-400">(${place.user_ratings_total} reviews)</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                              `);
+
+                            nearbyMarkersRef.current.push({ type, marker: dot });
+                        }
                     });
                 }
             });
