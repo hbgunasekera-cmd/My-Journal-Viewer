@@ -252,9 +252,27 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
 
 const VideoGallery = React.memo(({ videos, onClose }) => {
     useEffect(() => {
+        // Prevent background scrolling
         document.body.style.overflow = 'hidden';
+        
+        // DYNAMIC SCRIPT LOADING FIX
+        const scriptId = 'tiktok-embed-script';
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script');
+            script.id = scriptId;
+            script.src = "https://www.tiktok.com/embed.js";
+            script.async = true;
+            document.body.appendChild(script);
+        } else {
+            // If script exists, re-process the embeds
+            if (window.instgrm) window.instgrm.Embeds.process();
+        }
+
         if (window.lucide) window.lucide.createIcons();
-        return () => { document.body.style.overflow = 'unset'; };
+        
+        return () => { 
+            document.body.style.overflow = 'unset'; 
+        };
     }, []);
 
     const getTikTokId = (url) => {
@@ -263,9 +281,7 @@ const VideoGallery = React.memo(({ videos, onClose }) => {
         return matches ? matches[1] : null;
     };
 
-    // --- DATA AUDIT & FIX ---
-    // 1. Ensure it's an array.
-    // 2. Flatten any strings that contain commas (like your sample: ["url1,url2"])
+    // Flatten and clean the video list
     const videoList = (Array.isArray(videos) ? videos : [videos])
         .flatMap(item => (typeof item === 'string' ? item.split(',') : item))
         .map(s => s.trim())
@@ -279,9 +295,12 @@ const VideoGallery = React.memo(({ videos, onClose }) => {
             <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
                 <div>
                     <h3 className="text-white font-black uppercase tracking-widest text-xs">Video Journal</h3>
-                    <p className="text-[10px] text-indigo-400 font-bold uppercase">{videoList.length} Video Clips Found</p>
+                    <p className="text-[10px] text-indigo-400 font-bold uppercase">{videoList.length} Clips Loaded</p>
                 </div>
-                <button onClick={onClose} className="w-12 h-12 flex items-center justify-center bg-gray/10 hover:bg-rose-500 text-gray rounded-full transition-all">
+                <button 
+                    onClick={onClose} 
+                    className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all active:scale-90"
+                >
                     <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
             </div>
@@ -292,8 +311,9 @@ const VideoGallery = React.memo(({ videos, onClose }) => {
                     {videoList.map((url, i) => {
                         const videoId = getTikTokId(url);
                         if (!videoId) return null;
+                        
                         return (
-                            <div key={i} className="relative aspect-[9/16] rounded-[2rem] overflow-hidden bg-black border border-white/10 shadow-2xl group transition-transform hover:scale-[1.02]">
+                            <div key={i} className="relative aspect-[9/16] rounded-[2rem] overflow-hidden bg-black border border-white/5 shadow-2xl">
                                 <iframe
                                     src={`https://www.tiktok.com/embed/v2/${videoId}`}
                                     className="w-full h-full border-0"
@@ -998,13 +1018,41 @@ const fetchAttractions = async (lat, lng) => {
             window.placesService = new PlacesService(document.createElement('div'));
         }
 
+        // Keywords focused on your travel categories
+        const naturalKeywords = [
+            'waterfall', 'viewpoint', 'peak', 'mountain', 'forest', 
+            'park', 'nature reserve', 'monastery', 'temple', 'ancient', 
+            'archaeology', 'reservoir', 'lake', 'dam', 'river'
+        ];
+
         window.placesService.nearbySearch({
             location: new google.maps.LatLng(lat, lng),
             radius: 5000,
-            type: 'tourist_attraction'
+            type: 'tourist_attraction' // Keeping the base type but filtering results below
         }, (results, status) => {
             if (status === PlacesServiceStatus.OK) {
-                setNearbyAttractions(results.slice(0, 8).map(place => ({
+                // Filter results to exclude businesses and include your specific categories
+                const filteredResults = results.filter(place => {
+                    const name = place.name.toLowerCase();
+                    const types = place.types || [];
+
+                    // 1. BLOCK obvious business types
+                    const isBusiness = types.some(t => 
+                        ['store', 'restaurant', 'lodging', 'hotel', 'cafe', 'bar', 'shopping_mall'].includes(t)
+                    );
+
+                    // 2. ALLOW if name contains target keywords
+                    const matchesKeyword = naturalKeywords.some(keyword => name.includes(keyword));
+
+                    // 3. ALLOW if it has nature/landmark types
+                    const isNaturalType = types.some(t => 
+                        ['park', 'natural_feature', 'landmark', 'place_of_worship'].includes(t)
+                    );
+
+                    return !isBusiness && (matchesKeyword || isNaturalType);
+                });
+
+                setNearbyAttractions(filteredResults.slice(0, 8).map(place => ({
                     id: place.place_id,
                     name: place.name,
                     lat: place.geometry.location.lat(),
@@ -1677,7 +1725,7 @@ const clearSelectedRoute = () => {
     </div>
 )}
 
-         {/* Action Buttons Container */}
+         {/* Action Buttons Container */} {/* grid-cols-4 */}
 <div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
     
     {/* MAPS BUTTON - Soft Slate */}
