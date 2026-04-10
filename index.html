@@ -1018,38 +1018,46 @@ const fetchAttractions = async (lat, lng) => {
             window.placesService = new PlacesService(document.createElement('div'));
         }
 
-        // Keywords focused on your travel categories
+        // Expanded keywords for natural and spiritual sites
         const naturalKeywords = [
             'waterfall', 'viewpoint', 'peak', 'mountain', 'forest', 
             'park', 'nature reserve', 'monastery', 'temple', 'ancient', 
-            'archaeology', 'reservoir', 'lake', 'dam', 'river'
+            'archaeology', 'reservoir', 'lake', 'dam', 'river', 'church',
+            'kovil', 'vihara', 'shrine', 'mosque'
         ];
 
         window.placesService.nearbySearch({
             location: new google.maps.LatLng(lat, lng),
             radius: 5000,
-            type: 'tourist_attraction' // Keeping the base type but filtering results below
+            type: 'tourist_attraction' 
         }, (results, status) => {
             if (status === PlacesServiceStatus.OK) {
-                // Filter results to exclude businesses and include your specific categories
                 const filteredResults = results.filter(place => {
                     const name = place.name.toLowerCase();
                     const types = place.types || [];
 
-                    // 1. BLOCK obvious business types
+                    // 1. STRENGTHENED BLOCK: Remove shops, hotels, transit, and generic businesses
                     const isBusiness = types.some(t => 
-                        ['store', 'restaurant', 'lodging', 'hotel', 'cafe', 'bar', 'shopping_mall'].includes(t)
+                        [
+                            'store', 'restaurant', 'lodging', 'hotel', 'cafe', 'bar', 
+                            'shopping_mall', 'taxi_stand', 'transit_station', 'bus_station',
+                            'gas_station', 'car_repair', 'finance', 'establishment', 'point_of_interest'
+                        ].includes(t)
                     );
 
-                    // 2. ALLOW if name contains target keywords
+                    // 2. ALLOW if name contains specific nature/holy keywords
                     const matchesKeyword = naturalKeywords.some(keyword => name.includes(keyword));
 
-                    // 3. ALLOW if it has nature/landmark types
-                    const isNaturalType = types.some(t => 
-                        ['park', 'natural_feature', 'landmark', 'place_of_worship'].includes(t)
+                    // 3. ALLOW based on Google's specific metadata for Nature and Religion
+                    const isNaturalOrHoly = types.some(t => 
+                        [
+                            'park', 'natural_feature', 'landmark', 'place_of_worship',
+                            'church', 'hindu_temple', 'mosque'
+                        ].includes(t)
                     );
 
-                    return !isBusiness && (matchesKeyword || isNaturalType);
+                    // Filter Logic: Must NOT be a business AND (Must be a natural/holy type OR match a keyword)
+                    return !isBusiness && (matchesKeyword || isNaturalOrHoly);
                 });
 
                 setNearbyAttractions(filteredResults.slice(0, 8).map(place => ({
