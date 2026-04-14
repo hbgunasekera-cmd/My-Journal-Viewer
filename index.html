@@ -1134,9 +1134,7 @@ useEffect(() => {
     if (isAddOpen) {
         const initAutocomplete = async () => {
             try {
-                // This matches the dynamic loader's pattern
                 const { Autocomplete } = await google.maps.importLibrary("places");
-                
                 const input = document.getElementById('location-search');
                 if (!input) return;
 
@@ -1145,59 +1143,40 @@ useEffect(() => {
                     componentRestrictions: { country: "lk" }
                 });
 
-    autocompleteRef.current.addListener("place_changed", () => {
-    const place = autocompleteRef.current.getPlace();
-    if (!place.geometry) return;
+                autocompleteRef.current.addListener("place_changed", () => {
+                    const place = autocompleteRef.current.getPlace();
+                    if (!place.geometry) return;
 
-    const lat = place.geometry.location.lat();
-    const lng = place.geometry.location.lng();
+                    const lat = place.geometry.location.lat();
+                    const lng = place.geometry.location.lng();
 
-    // Extract District (Level 2 Admin Area)
-    const districtName = place.address_components?.find(c => 
-        c.types.includes("administrative_area_level_2")
-    )?.long_name || '';
+                    // Smart mapping: Try District first, then fallback to City/Locality
+                    const addressComponents = place.address_components || [];
+                    const districtName = addressComponents.find(c => 
+                        c.types.includes("administrative_area_level_2")
+                    )?.long_name || addressComponents.find(c => 
+                        c.types.includes("locality") || c.types.includes("sublocality")
+                    )?.long_name || '';
 
-    // Extract Locality (City, Town, or Neighborhood)
-    const localityName = place.address_components?.find(c => 
-        c.types.includes("locality") || c.types.includes("sublocality")
-    )?.long_name || '';
+                    setFormData(prev => ({
+                        ...prev,
+                        place_name: place.name,
+                        latitude: lat,
+                        longitude: lng,
+                        map_url: place.url,
+                        district: districtName // Saved to the correct DB column
+                    }));
 
-    setFormData(prev => ({
-        ...prev,
-        place_name: place.name,
-        latitude: lat,
-        longitude: lng,
-        map_url: place.url,
-        district: districtName,
-        locality: localityName // Captured for multi-column search
-    }));
-
-    if (addMapRef.current) {
-        addMapRef.current.setView([lat, lng], 14); 
-        
-        // Clear previous temporary search marker
-        if (tempMarkerRef.current) {
-            addMapRef.current.removeLayer(tempMarkerRef.current);
-        }
-
-        // Add the bright yellow dot for the newly selected spot
-        tempMarkerRef.current = L.circleMarker([lat, lng], {
-            radius: 8,
-            fillColor: '#facc15', // Tailwind Yellow-400
-            color: '#ca8a04',     // Tailwind Yellow-600 border
-            weight: 3,
-            fillOpacity: 1
-        })
-        .bindTooltip("★ Selected Location", { permanent: true, direction: 'top' })
-        .addTo(addMapRef.current);
-    }
-});
-            } catch (err) {
-                console.error("Google Maps Places library failed to load:", err);
-            }
+                    if (addMapRef.current) {
+                        addMapRef.current.setView([lat, lng], 14);
+                        if (tempMarkerRef.current) addMapRef.current.removeLayer(tempMarkerRef.current);
+                        tempMarkerRef.current = L.circleMarker([lat, lng], {
+                            radius: 8, fillColor: '#facc15', color: '#ca8a04', weight: 3, fillOpacity: 1
+                        }).addTo(addMapRef.current);
+                    }
+                });
+            } catch (err) { console.error(err); }
         };
-
-        // Delay slightly to ensure the modal's DOM element #location-search exists
         const timer = setTimeout(initAutocomplete, 500);
         return () => clearTimeout(timer);
     }
@@ -1240,12 +1219,17 @@ const handleAddPlace = async (e) => {
     // If it passes validation, submit to pending_approvals
     try {
         const { error } = await supabaseClient
-            .from('pending_approvals') 
-            .insert([{
-                ...formData,
-                status: 'pending',
-                created_at: new Date().toISOString()
-            }]);
+    .from('pending_approvals')
+    .insert([{
+        place_name: formData.place_name,
+        district: formData.district,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        map_url: formData.map_url,
+        image_url: formData.image_url,
+        category: formData.category,
+        status: formData.status
+    }]);
 
         if (error) throw error;
 
