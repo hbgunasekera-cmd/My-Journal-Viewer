@@ -400,6 +400,7 @@ function useDebounce(value, delay = 300) {
                restaurant: false
           });
     const [nearbyAttractions, setNearbyAttractions] = React.useState([]);
+    const [notifications, setNotifications] = React.useState([]);
     
     
  
@@ -454,6 +455,23 @@ useEffect(() => {
         clearTimeout(iconTimer);
     };
 }, []);
+
+const showToast = React.useCallback((message, type = 'info') => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 4000);
+}, []);
+
+// This ensures Lucide icons render inside the toasts when they appear
+React.useEffect(() => {
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+}, [notifications]);
 
 // --- 3. Add Location Verification Map ---
 useEffect(() => {
@@ -655,7 +673,7 @@ const toggleNearby = async (type) => {
     }
 
     // If turning ON: Check for route and fetch
-    if (!routingControlRef.current?._selectedRoute) return alert("Please plan a route first!");
+    if (!routingControlRef.current?._selectedRoute) return showToast("Please plan a route first!");
     
     try {
         await google.maps.importLibrary("places");
@@ -819,7 +837,7 @@ const WeatherIcon = ({ condition, className = "w-3 h-3 text-blue-500" }) => {
 
 const handleAlbumClick = (albumUrl) => {
             if (!albumUrl) {
-                alert("No album link available for this location.");
+                showToast("No album link available for this location.");
                 return;
             }
             window.open(albumUrl, '_blank');
@@ -1185,77 +1203,80 @@ useEffect(() => {
 const handleAddPlace = async (e) => {
     e.preventDefault();
 
-    if (!formData.latitude) {
-        alert("Please select a location from the search suggestions dropdown.");
+    // 1. Validation: Ensure a location was selected via Google Autocomplete
+    if (!formData.latitude || !formData.longitude) {
+        showToast("Please select a location from the search suggestions dropdown.");
         return;
     }
 
-    
+    // 2. Normalization for Duplicate Check
     const normalizedName = formData.place_name.trim().toLowerCase();
     const latFixed = parseFloat(formData.latitude).toFixed(4);
     const lngFixed = parseFloat(formData.longitude).toFixed(4);
     const formUrl = formData.map_url || "";
 
+    // 3. Duplicate Detection Logic
     const isDuplicate = places.some(p => {
-        // Check Name
+        // Check for Name match
         const nameMatch = p.place_name && p.place_name.toLowerCase() === normalizedName;
         
-        // Check Coordinates (up to 4 decimal places / ~11 meters)
+        // Check for Coordinate match (~11m precision)
         const coordMatch = p.latitude && p.longitude && 
                            parseFloat(p.latitude).toFixed(4) === latFixed && 
                            parseFloat(p.longitude).toFixed(4) === lngFixed;
         
-        // Check Google Maps URL (using the specific DB column name 'google_maps_url')
+        // Check for Google Maps URL match
         const urlMatch = formUrl && p.google_maps_url && p.google_maps_url === formUrl;
 
         return nameMatch || coordMatch || urlMatch;
     });
 
     if (isDuplicate) {
-        alert("⚠️ Verification Failed: This location (Name, Coordinates, or Map Link) already exists in your Journal!");
-        return; // Stops execution, preventing the database insert
+        showToast("⚠️ Verification Failed: This location already exists in your Journal!");
+        return; 
     }
 
-    // If it passes validation, submit to pending_approvals
+    // 4. Submit to Database
     try {
         const { error } = await supabaseClient
-    .from('pending_approvals')
-    .insert([{
-        place_name: formData.place_name,
-        district: formData.district,
-        latitude: formData.latitude,
-        longitude: formData.longitude,
-        map_url: formData.map_url,
-        image_url: formData.image_url,
-        category: formData.category,
-        status: formData.status
-    }]);
+            .from('pending_approvals')
+            .insert([{
+                place_name: formData.place_name,
+                district: formData.district, // Column verified in schema
+                latitude: formData.latitude,
+                longitude: formData.longitude,
+                map_url: formData.map_url,
+                image_url: formData.image_url,
+                category: formData.category,
+                status: 'pending' // Explicitly set status for approval flow
+            }]);
 
         if (error) throw error;
 
-        alert("Success! Your suggestion has been sent to the Admin for approval.");
+        // 5. Success Handling
+        showToast("Success! Your suggestion has been sent for approval.");
         setisAddOpen(false);
         
-        // Reset local form state
-        
-    setFormData({
-    place_name: '', 
-    district: '',
-    latitude: '', 
-    longitude: '',
-    map_url: '', 
-    image_url: 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png',
-    status: 'pending', 
-    category: 'Waterfall'
-     });
-        // Clean up the yellow marker so it's fresh next time
+        // Reset state (No 'locality' key included)
+        setFormData({
+            place_name: '', 
+            district: '',
+            latitude: '', 
+            longitude: '',
+            map_url: '', 
+            image_url: 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png',
+            status: 'pending', 
+            category: 'Waterfall'
+        });
+
+        // Clear the map marker
         if (tempMarkerRef.current && addMapRef.current) {
             addMapRef.current.removeLayer(tempMarkerRef.current);
             tempMarkerRef.current = null;
         }
 
     } catch (err) {
-        alert("Error sending request: " + err.message);
+        showToast("Error sending request: " + err.message);
     }
 };
 
@@ -1356,7 +1377,7 @@ const showQRCode = (points, name = "My Travel Route") => {
     modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
     modal.querySelector('#copy-link-btn').onclick = () => {
         navigator.clipboard.writeText(universalUrl);
-        alert("Link copied!"); // Fallback if showToast state is not accessible
+        showToast("Link copied!"); // Fallback if showToast state is not accessible
     };
     modal.querySelector('#whatsapp-modal-btn').onclick = () => {
         const text = encodeURIComponent(`Check out my route: ${universalUrl}`);
@@ -2204,6 +2225,8 @@ const clearSelectedRoute = () => {
 </div>
 
     </div>
+    
+    
 )}
 
 {activeId && (
@@ -2224,9 +2247,40 @@ const clearSelectedRoute = () => {
 
 <PrivacyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
 
+// Locate this block at the bottom of your file and move it:
+{/* Toast Notification Container */}
+<div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-md w-full sm:w-auto">
+    {notifications.map((n) => (
+        <div 
+            key={n.id} 
+            className={`flex items-center gap-3 p-4 rounded-2xl shadow-2xl border animate-in fade-in slide-in-from-right-4 duration-300 ${
+                n.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' :
+                n.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' :
+                'bg-white border-slate-100 text-slate-800'
+            }`}
+        >
+            {/* Fix the icon names here as well */}
+            {n.type === 'error' && <i data-lucide="alert-circle" className="w-5 h-5 text-red-500"></i>}
+            {n.type === 'success' && <i data-lucide="check-circle-2" className="w-5 h-5 text-emerald-500"></i>}
+            {n.type === 'info' && <i data-lucide="info" className="w-5 h-5 text-indigo-500"></i>}
+            
+            <p className="text-sm font-semibold">{n.message}</p>
+            
+            <button 
+                onClick={() => setNotifications(prev => prev.filter(notif => notif.id !== n.id))} 
+                className="ml-auto p-1 hover:bg-black/5 rounded-lg transition-colors"
+            >
+                <i data-lucide="x" className="w-4 h-4 opacity-50 hover:opacity-100"></i>
+            </button>
+        </div>
+    ))}
+</div>
+
         </div>
       );
      }
+     
+  
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
