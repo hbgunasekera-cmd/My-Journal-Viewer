@@ -526,6 +526,8 @@ useEffect(() => {
         }
         return;
     }
+    
+    logVisit("Plan Trip Action");
 
     const timer = setTimeout(() => {
         const mapContainer = document.getElementById('planner-map');
@@ -922,53 +924,59 @@ const handleAlbumClick = (albumUrl) => {
     }
 };
 
-   const logVisit = async () => {
-            // Check session storage to prevent logging refreshes
-            if (sessionStorage.getItem('visit_logged') || window.location.protocol === 'file:') return;
+   const logVisit = async (path = 'Main Page') => {
+    // 1. Session check: Only prevent 'Main Page' duplicates. 
+    // Interaction hits (Plan/Add) should always be logged.
+    if (path === 'Main Page' && sessionStorage.getItem('visit_logged')) return;
+    
+    // Safety check for local files
+    if (window.location.protocol === 'file:') return;
 
-            let geo = null;
-            const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
+    let geo = null;
+    const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
 
-            for (const url of providers) {
-                try {
-                    const response = await fetch(url);
-                    if (response.ok) {
-                        const data = await response.json();
-                        geo = {
-                            ip: data.ip || data.query || data.ipAddress || '',
-                            country: data.country_name || data.countryName || data.country || 'Unknown',
-                            region: data.region_name || data.stateProv || data.region || 'Unknown',
-                            city: data.city || 'Unknown'
-                        };
-                        break; 
-                    }
-                } catch (e) { console.warn(`Log provider failed...`); }
+    for (const url of providers) {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                geo = {
+                    ip: data.ip || data.query || data.ipAddress || '',
+                    country: data.country_name || data.countryName || data.country || 'Unknown',
+                    region: data.region_name || data.stateProv || data.region || 'Unknown',
+                    city: data.city || 'Unknown'
+                };
+                break; 
             }
+        } catch (e) { console.warn(`Log provider failed...`); }
+    }
 
-            if (!geo || !geo.ip) return;
+    if (!geo || !geo.ip) return;
 
-            const ua = navigator.userAgent;
-            // Exclusion logic for your own devices
-            const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || ua.includes("rv:148.0") || (ua.includes("iPhone") && ua.includes("CriOS"));
-            if (isOwner) return;
-
-            const { error } = await supabaseClient.from('page_visits').insert([{
-                page_path: 'Main Page',
-                user_agent: ua,
-                country: geo.country,
-                region: geo.region,
-                city: geo.city,
-                ip_address: geo.ip
-            }]);
-
-            if (!error) sessionStorage.setItem('visit_logged', 'true');
-        };
-
-const getDeviceType = () => {
     const ua = navigator.userAgent;
-    if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) return "Tablet";
-    if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Kindle|NetFront|Silk-Accelerated|(hpw|web)OS|Fennec|Minimo|Opera M(obi|ini)|Blazer|Dolfin|Dolphin|Skyfire|Zune/.test(ua)) return "Mobile";
-    return "Desktop";
+    const device = (() => {
+        if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) return "Tablet";
+        if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Kindle|NetFront|Silk-Accelerated|(hpw|web)OS|Fennec|Minimo|Opera M(obi|ini)|Blazer|Dolfin|Dolphin|Skyfire|Zune/.test(ua)) return "Mobile";
+        return "Desktop";
+    })();
+
+    // Exclusion logic for owner devices
+    const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || ua.includes("rv:148.0") || (ua.includes("iPhone") && ua.includes("CriOS"));
+    if (isOwner) return;
+
+    const { error } = await supabaseClient.from('page_visits').insert([{
+        page_path: path, // Uses the passed parameter
+        user_agent: ua,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
+        ip_address: geo.ip,
+        device_type: device // Added device type to your DB hit
+    }]);
+
+    if (!error && path === 'Main Page') {
+        sessionStorage.setItem('visit_logged', 'true');
+    }
 };
 
       const getUserLocation = () => {
@@ -1149,7 +1157,11 @@ const shareRoute = () => {
 
 
 useEffect(() => {
+
     if (isAddOpen) {
+    
+    logVisit("Add Location Action");
+    
         const initAutocomplete = async () => {
             try {
                 const { Autocomplete } = await google.maps.importLibrary("places");
