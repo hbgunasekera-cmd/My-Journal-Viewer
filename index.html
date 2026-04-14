@@ -922,47 +922,57 @@ const handleAlbumClick = (albumUrl) => {
     }
 };
 
-   const logVisit = async () => {
-            // Check session storage to prevent logging refreshes
-            if (sessionStorage.getItem('visit_logged') || window.location.protocol === 'file:') return;
+  const logVisit = async (path = 'Main Page') => {
+    // 1. Prevent logging if running locally
+    if (window.location.protocol === 'file:') return;
 
-            let geo = null;
-            const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
+    // 2. Special logic for 'Main Page': Only log once per session
+    if (path === 'Main Page' && sessionStorage.getItem('visit_logged')) return;
 
-            for (const url of providers) {
-                try {
-                    const response = await fetch(url);
-                    if (response.ok) {
-                        const data = await response.json();
-                        geo = {
-                            ip: data.ip || data.query || data.ipAddress || '',
-                            country: data.country_name || data.countryName || data.country || 'Unknown',
-                            region: data.region_name || data.stateProv || data.region || 'Unknown',
-                            city: data.city || 'Unknown'
-                        };
-                        break; 
-                    }
-                } catch (e) { console.warn(`Log provider failed...`); }
+    // 3. Fetch Geo-location Data
+    let geo = null;
+    const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
+
+    for (const url of providers) {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                geo = {
+                    ip: data.ip || data.query || data.ipAddress || '',
+                    country: data.country_name || data.countryName || data.country || 'Unknown',
+                    region: data.region_name || data.stateProv || data.region || 'Unknown',
+                    city: data.city || 'Unknown'
+                };
+                break; 
             }
+        } catch (e) { console.warn(`Log provider failed...`); }
+    }
 
-            if (!geo || !geo.ip) return;
+    if (!geo || !geo.ip) return;
 
-            const ua = navigator.userAgent;
-            // Exclusion logic for your own devices
-            const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || ua.includes("rv:148.0") || (ua.includes("iPhone") && ua.includes("CriOS"));
-            if (isOwner) return;
+    // 4. Device Exclusion Logic
+    const ua = navigator.userAgent;
+    const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || 
+                    ua.includes("rv:148.0") || 
+                    (ua.includes("iPhone") && ua.includes("CriOS"));
+    if (isOwner) return;
 
-            const { error } = await supabaseClient.from('page_visits').insert([{
-                page_path: 'Main Page',
-                user_agent: ua,
-                country: geo.country,
-                region: geo.region,
-                city: geo.city,
-                ip_address: geo.ip
-            }]);
+    // 5. Insert into Supabase
+    const { error } = await supabaseClient.from('page_visits').insert([{
+        page_path: path,
+        user_agent: ua,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
+        ip_address: geo.ip
+    }]);
 
-            if (!error) sessionStorage.setItem('visit_logged', 'true');
-        };
+    // 6. Mark main landing as logged
+    if (!error && path === 'Main Page') {
+        sessionStorage.setItem('visit_logged', 'true');
+    }
+};
 
 
       const getUserLocation = () => {
@@ -1144,6 +1154,9 @@ const shareRoute = () => {
 
 useEffect(() => {
     if (isAddOpen) {
+    
+    logVisit('Add Function');
+    
         const initAutocomplete = async () => {
             try {
                 const { Autocomplete } = await google.maps.importLibrary("places");
@@ -1277,6 +1290,9 @@ const handleAddPlace = async (e) => {
 React.useEffect(() => {
     // Only run if planner is open and we have data
     if (isPlannerOpen && places.length > 0) {
+    
+    logVisit('Plan Function');
+    
             const filteredForWeather = places.filter(place => {
            
             const search = (debouncedPlannerSearch || "").toLowerCase();
