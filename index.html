@@ -377,7 +377,6 @@ function useDebounce(value, delay = 300) {
     const [formData, setFormData] = useState({
     place_name: '',
     district: '',
-    locality: '',
     latitude: '',
     longitude: '',
     map_url: '',
@@ -1255,10 +1254,9 @@ const handleAddPlace = async (e) => {
         
         // Reset local form state
         
-     setFormData({
+    setFormData({
     place_name: '', 
-    district: '', 
-    locality: '',
+    district: '',
     latitude: '', 
     longitude: '',
     map_url: '', 
