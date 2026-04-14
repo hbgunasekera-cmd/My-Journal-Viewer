@@ -377,13 +377,14 @@ function useDebounce(value, delay = 300) {
     const [formData, setFormData] = useState({
     place_name: '',
     district: '',
+    locality: '',
     latitude: '',
     longitude: '',
     map_url: '',
     image_url: 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png',
     status: 'backlog',
     category: 'Waterfall'
-});
+    });
     
     const debouncedSearch = useDebounce(searchTerm, 300);
     const debouncedPlannerSearch = useDebounce(plannerSearch, 300);
@@ -1169,7 +1170,7 @@ useEffect(() => {
         longitude: lng,
         map_url: place.url,
         district: districtName,
-        
+        locality: localityName // Captured for multi-column search
     }));
 
     if (addMapRef.current) {
@@ -1256,7 +1257,9 @@ const handleAddPlace = async (e) => {
         
      setFormData({
     place_name: '', 
-    district: '',  
+    district: '', 
+    locality: '',
+    latitude: '', 
     longitude: '',
     map_url: '', 
     image_url: 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png',
