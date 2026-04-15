@@ -954,8 +954,7 @@ const handleAlbumClick = (albumUrl) => {
     // 4. Device Exclusion Logic
     const ua = navigator.userAgent;
     const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || 
-                    ua.includes("rv:148.0") || 
-                    (ua.includes("iPhone") && ua.includes("CriOS"));
+                    ua.includes("rv:148.0"));
     if (isOwner) return;
 
     // 5. Insert into Supabase
