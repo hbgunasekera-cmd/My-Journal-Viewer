@@ -953,9 +953,21 @@ const handleAlbumClick = (albumUrl) => {
 
     // 4. Device Exclusion Logic
     const ua = navigator.userAgent;
-    const isOwner = geo.ip.startsWith("2402:4000:b280:b2d") || 
-                    ua.includes("rv:148.0");
-    if (isOwner) return;
+
+// Comprehensive exclusion logic for your specific devices and networks
+const isOwner = 
+    // 1. Network Filters: Matches your old AND new IP prefixes
+    geo.ip.startsWith("2402:4000:b280:b2d") || 
+    geo.ip.startsWith("2402:4000:b201:5074") || 
+    
+    // 2. Broad Browser Filters: Catches any Chrome on iPhone
+    (ua.includes("iPhone") && ua.includes("CriOS")) || 
+    
+    // 3. Specific Version Filters: Catches the exact Firefox and Google App versions
+    ua.includes("rv:149.0") || 
+    ua.includes("GSA/390.0");
+
+if (isOwner) return;
 
     // 5. Insert into Supabase
     const { error } = await supabaseClient.from('page_visits').insert([{
