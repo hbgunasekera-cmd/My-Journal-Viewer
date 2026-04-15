@@ -1291,6 +1291,7 @@ React.useEffect(() => {
     // Only run if planner is open and we have data
     if (isPlannerOpen && places.length > 0) {
     
+    logVisit('Plan Function');
     
             const filteredForWeather = places.filter(place => {
            
