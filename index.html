@@ -1933,7 +1933,15 @@ const clearSelectedRoute = () => {
                     )}
                 </div>
                 
- 
+  {/* ADVERTISEMENT BLOCK - Integrated as a Grid Item */}
+    <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
+        <div id="container-023accb7675231a6241cd0771cc13617" className="w-full h-full flex items-center justify-center">
+            {/* The Adsterra script will inject the ad here */}
+        </div>
+        <div className="absolute top-4 right-4">
+            <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
+        </div>
+    </div>
                 
 
                 {/* DISCUSSION SECTION */}
@@ -1997,16 +2005,6 @@ const clearSelectedRoute = () => {
                         </button>
                     </div>
                 </div>
-                
-                 {/* ADVERTISEMENT BLOCK - Integrated as a Grid Item */}
-    <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
-        <div id="container-023accb7675231a6241cd0771cc13617" className="w-full h-full flex items-center justify-center">
-            {/* The Adsterra script will inject the ad here */}
-        </div>
-        <div className="absolute top-4 right-4">
-            <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
-        </div>
-    </div>
 
                 <button onClick={() => setisArticleOpen(false)} className="mt-8 w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-colors">Close Journal</button>
             </div>
