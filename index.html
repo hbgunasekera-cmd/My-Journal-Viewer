@@ -1941,15 +1941,19 @@ const clearSelectedRoute = () => {
                     )}
                 </div>
                 
-                {/* ADVERTISEMENT BLOCK */}
-                <div className="my-10 py-8 border-y border-slate-50 flex flex-col items-center justify-center">
-                    <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest mb-4 italic">Sponsored Content</span>
-                    <div id="container-023accb7675231a6241cd0771cc13617" className="w-full flex justify-center min-h-[100px]">
-                        
-<div id="container-023accb7675231a6241cd0771cc13617"></div>
-
-                    </div>
-                </div>
+              {/* ADVERTISEMENT BLOCK */}
+<div className="my-10 py-8 border-y border-slate-50 flex flex-col items-center justify-center">
+    <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest mb-4 italic">
+        Sponsored Content
+    </span>
+    {/* This specific ID is required for the ad network to find the injection point */}
+    <div 
+        id="container-023accb7675231a6241cd0771cc13617" 
+        className="w-full flex justify-center min-h-[100px]"
+    >
+        {/* The external script will inject the ad content here */}
+    </div>
+</div>
                 
 
                 {/* DISCUSSION SECTION */}
