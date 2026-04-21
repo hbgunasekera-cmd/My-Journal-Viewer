@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📸</text></svg>">
     <title>My Journal</title>
 
@@ -16,9 +16,8 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script> 
+    
     <script async src="https://www.tiktok.com/embed.js"></script>
-    
-    
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-VRVQHWP2BJ"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -31,36 +30,45 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
-    
-   <script>
-    (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-        key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs", 
-        v: "weekly",
-        libraries: ["places"] 
-    });
-</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
-        
+    <script>
+        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Re-trying:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+            key: "AIzaSyB7OkvfJ1fOwtOY5jw4r2_GK0O7qvUVuPs", 
+            v: "weekly",
+            libraries: ["places"] 
+        });
+    </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         
+        /* Base Setup */
         body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
             background-color: #F8FAFC; 
             overflow: hidden; 
             user-select: none; 
+            -webkit-tap-highlight-color: transparent;
         }
 
-        /* UI Helpers */
-        .scrollable-list::-webkit-scrollbar { width: 6px; }
-        .scrollable-list::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
-        .text-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-        .leaflet-routing-container { display: none !important; }
+        h1 { white-space: nowrap; }
+
+        /* UI & Scroll Helpers */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
         
-        /* Custom Map Components */
+        .scrollable-list {
+            height: calc(100vh - 280px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+
+        .text-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        
+        /* Map Overrides */
+        .leaflet-routing-container { display: none !important; }
         .custom-map-tooltip {
             background: white !important;
             border: none !important;
@@ -71,6 +79,7 @@
         .leaflet-tooltip-top:before { border-top-color: white !important; }
         .leaflet-tooltip-pane .leaflet-tooltip { pointer-events: none; }
 
+        /* FAB & Buttons */
         .mobile-fab-container {
             position: fixed;
             bottom: 2rem;
@@ -78,74 +87,54 @@
             transform: translateX(-50%);
             z-index: 1000;
         }
+        .plan-trip-btn { box-shadow: 0 10px 25px -5px rgba(249, 115, 22, 0.4); }
 
-        .plan-trip-btn {
-            box-shadow: 0 10px 25px -5px rgba(249, 115, 22, 0.4);
-        }
-
+        /* Animations */
         @keyframes icon-pulse {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7); }
             70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
         }
-
         .animate-icon-highlight { animation: icon-pulse 2s infinite; }
-        .scrollable-list {
-    height: calc(100vh - 280px); /* Adjusts based on the new smaller header */
-    overflow-y: auto;
-}
 
-/* Fix Google Maps Autocomplete Z-Index Bug */
-.pac-container {
-    z-index: 10000 !important; /* Forces it above your z-[3000] modal */
-    border-radius: 1rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-    border: none;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    margin-top: 8px;
-}
-.pac-item {
-    padding: 10px 16px;
-    cursor: pointer;
-    font-weight: 600;
-    color: #0f172a;
-}
-.pac-item:hover {
-    background-color: #f8fafc;
-}
-.pac-item-query {
-    font-size: 14px;
-}
-@keyframes slow-blink {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(1.05); }
-}
+        @keyframes slow-blink {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        .animate-adventure { animation: slow-blink 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-.animate-adventure {
-    animation: slow-blink 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
+        /* Google Maps Autocomplete Z-Index Fix */
+        .pac-container {
+            z-index: 11000 !important; 
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            border: none;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin-top: 8px;
+        }
+        .pac-item { padding: 10px 16px; cursor: pointer; font-weight: 600; color: #0f172a; }
+        .pac-item:hover { background-color: #f8fafc; }
 
-body.modal-open {
-    overflow: hidden;
-    position: fixed;
-    width: 100%;
-}
+        /* Image Copy Protection */
+        img {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            pointer-events: none; /* Globally prevent drag/context menu */
+        }
 
-.custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.1);
-    border-radius: 10px;
-}
-        
-        h1 { white-space: nowrap; }
+        /* Modal Locking */
+        body.modal-open {
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+        }
     </style>
-    
 </head>
+
 <body class="h-screen flex flex-col">
     <div id="root" class="h-full"></div>
 
@@ -181,23 +170,27 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const PhotoGallery = React.memo(({ photos, onClose }) => {
     const [activeIndex, setActiveIndex] = React.useState(null);
 
+    // Prevent right-click and standard saving actions
     const preventCopy = (e) => {
         e.preventDefault();
         return false;
     };
 
+    // Prevent scrolling and initialize icons
     useEffect(() => {
         const x = window.scrollX;
         const y = window.scrollY;
         window.onscroll = () => window.scrollTo(x, y);
         document.body.style.overflow = 'hidden';
         if (window.lucide) window.lucide.createIcons();
+        
         return () => {
             window.onscroll = null;
             document.body.style.overflow = 'unset';
         };
     }, []);
 
+    // Handle Keyboard and Lucide Refresh
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (activeIndex === null) return;
@@ -205,8 +198,10 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
             if (e.key === 'ArrowLeft') prevImage();
             if (e.key === 'Escape') setActiveIndex(null);
         };
+        
         window.addEventListener('keydown', handleKeyDown);
         if (window.lucide) window.lucide.createIcons();
+        
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [activeIndex]);
 
@@ -243,7 +238,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                 </button>
             </div>
 
-            {/* Main Grid */}
+            {/* Main Grid View */}
             <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar">
                 <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {photos.map((url, i) => (
@@ -254,13 +249,16 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         >
                             <img 
                                 src={url} 
-                                className="w-full h-full object-cover" 
+                                className="w-full h-full object-cover select-none pointer-events-none" 
+                                style={{ WebkitTouchCallout: 'none' }}
                                 loading="lazy" 
                                 alt=""
                                 onContextMenu={preventCopy}
                                 onDragStart={preventCopy}
                             />
-                            <div className="absolute inset-0 z-10 bg-transparent"></div>
+                            {/* Protection Shield for Grid */}
+                            <div className="absolute inset-0 z-10 bg-transparent touch-none"></div>
+                            
                             <div className="absolute top-5 left-5 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 z-20">
                                 <span className="text-[10px] font-black text-white">{i + 1}</span>
                             </div>
@@ -277,7 +275,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                     onClick={() => setActiveIndex(null)}
                     onContextMenu={preventCopy}
                 >
-                    {/* UI Controls */}
+                    {/* Navigation UI */}
                     <button 
                         className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all z-[12000]"
                         onClick={() => setActiveIndex(null)}
@@ -299,26 +297,27 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         <i data-lucide="chevron-right" className="w-8 h-8 group-active:scale-90 transition-transform"></i>
                     </button>
 
-                    {/* Image Stage: This container ensures the image fits the screen */}
-                    <div className="relative flex-1 w-full h-full flex items-center justify-center p-4 md:p-12 lg:p-16 overflow-hidden">
-                        <div className="relative max-w-full max-h-full flex items-center justify-center">
+                    {/* Fixed Image Stage: Prevent Cropping */}
+                    <div className="flex-1 w-full flex items-center justify-center p-2 md:p-12 lg:p-16">
+                        <div className="relative w-full h-full flex items-center justify-center">
                             <img 
                                 src={photos[activeIndex]} 
-                                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-300 pointer-events-none"
+                                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-md shadow-2xl animate-in fade-in zoom-in-95 duration-300 pointer-events-none select-none touch-none"
+                                style={{ WebkitTouchCallout: 'none' }}
                                 alt=""
                                 onContextMenu={preventCopy}
                                 onDragStart={preventCopy}
                             />
-                            {/* Transparent Shield covering only the image area */}
-                            <div className="absolute inset-0 z-[11500] bg-transparent cursor-default"></div>
+                            {/* Protection Shield */}
+                            <div className="absolute inset-0 z-[11500] bg-transparent cursor-default touch-none"></div>
                         </div>
-                        
-                        {/* Counter */}
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10 z-[12000]">
-                            <p className="text-white text-[10px] font-black tracking-[0.2em] uppercase">
-                                {activeIndex + 1} / {photos.length}
-                            </p>
-                        </div>
+                    </div>
+                    
+                    {/* Counter Indicator */}
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl px-6 py-2 rounded-full border border-white/10 z-[12000]">
+                        <p className="text-white text-[10px] font-black tracking-[0.2em] uppercase">
+                            {activeIndex + 1} / {photos.length}
+                        </p>
                     </div>
                 </div>
             )}
