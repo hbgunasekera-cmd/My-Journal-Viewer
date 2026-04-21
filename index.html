@@ -132,6 +132,12 @@
             position: fixed;
             width: 100%;
         }
+        
+        .modal-open {
+    overflow: hidden !important;
+    padding-right: 0px; /* Optional: adjust for scrollbar width jump */
+}
+
     </style>
 </head>
 
@@ -176,21 +182,25 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
         return false;
     };
 
-    // Prevent scrolling and initialize icons
+    // Manage scroll lock and icon initialization
     useEffect(() => {
-        const x = window.scrollX;
-        const y = window.scrollY;
-        window.onscroll = () => window.scrollTo(x, y);
-        document.body.style.overflow = 'hidden';
+        // 1. Capture exact scroll position of the main page
+        const scrollY = window.scrollY;
+        
+        // 2. Lock body scroll using the 'modal-open' class logic
+        document.body.classList.add('modal-open');
+        
+        // 3. Initialize icons
         if (window.lucide) window.lucide.createIcons();
         
         return () => {
-            window.onscroll = null;
-            document.body.style.overflow = 'unset';
+            // 4. Cleanup: Remove lock and force window back to captured position
+            document.body.classList.remove('modal-open');
+            window.scrollTo(0, scrollY);
         };
     }, []);
 
-    // Handle Keyboard and Lucide Refresh
+    // Handle Keyboard Navigation and Counter Refresh
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (activeIndex === null) return;
@@ -297,7 +307,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         <i data-lucide="chevron-right" className="w-8 h-8 group-active:scale-90 transition-transform"></i>
                     </button>
 
-                    {/* Fixed Image Stage: Prevent Cropping */}
+                    {/* Image Stage: object-contain and max-h-[85vh] prevent cropping */}
                     <div className="flex-1 w-full flex items-center justify-center p-2 md:p-12 lg:p-16">
                         <div className="relative w-full h-full flex items-center justify-center">
                             <img 
