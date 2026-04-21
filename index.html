@@ -179,24 +179,25 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const PhotoGallery = React.memo(({ photos, onClose }) => {
-    // State to track the index of the image being viewed in full-screen
     const [activeIndex, setActiveIndex] = React.useState(null);
+
+    const preventCopy = (e) => {
+        e.preventDefault();
+        return false;
+    };
 
     useEffect(() => {
         const x = window.scrollX;
         const y = window.scrollY;
         window.onscroll = () => window.scrollTo(x, y);
         document.body.style.overflow = 'hidden';
-
         if (window.lucide) window.lucide.createIcons();
-
         return () => {
             window.onscroll = null;
             document.body.style.overflow = 'unset';
         };
     }, []);
 
-    // Handle Keyboard Navigation (Desktop/PC)
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (activeIndex === null) return;
@@ -204,10 +205,8 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
             if (e.key === 'ArrowLeft') prevImage();
             if (e.key === 'Escape') setActiveIndex(null);
         };
-
         window.addEventListener('keydown', handleKeyDown);
         if (window.lucide) window.lucide.createIcons();
-        
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [activeIndex]);
 
@@ -225,9 +224,10 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
 
     return (
         <div 
-            className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200"
+            className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200 select-none"
             style={{ height: '100dvh' }}
             onClick={(e) => e.stopPropagation()}
+            onContextMenu={preventCopy}
         >
             {/* Header */}
             <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
@@ -237,7 +237,7 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                 </div>
                 <button 
                     onClick={onClose}
-                    className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all"
+                    className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-grey rounded-full transition-all"
                 >
                     <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
@@ -252,8 +252,16 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                             onClick={() => setActiveIndex(i)}
                             className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl cursor-zoom-in hover:scale-[1.02] transition-transform duration-300"
                         >
-                            <img src={url} className="w-full h-full object-cover" loading="lazy" alt="" />
-                            <div className="absolute top-5 left-5 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+                            <img 
+                                src={url} 
+                                className="w-full h-full object-cover" 
+                                loading="lazy" 
+                                alt=""
+                                onContextMenu={preventCopy}
+                                onDragStart={preventCopy}
+                            />
+                            <div className="absolute inset-0 z-10 bg-transparent"></div>
+                            <div className="absolute top-5 left-5 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 z-20">
                                 <span className="text-[10px] font-black text-white">{i + 1}</span>
                             </div>
                         </div>
@@ -265,45 +273,49 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
             {/* Full-Screen Viewer Overlay */}
             {activeIndex !== null && (
                 <div 
-                    className="fixed inset-0 z-[11000] bg-black/95 backdrop-blur-2xl flex items-center justify-center animate-in zoom-in-95 duration-200"
+                    className="fixed inset-0 z-[11000] bg-black/95 backdrop-blur-2xl flex flex-col animate-in zoom-in-95 duration-200"
                     onClick={() => setActiveIndex(null)}
+                    onContextMenu={preventCopy}
                 >
-                    {/* Close Button */}
+                    {/* UI Controls */}
                     <button 
-                        className="absolute top-6 right-6 md:top-10 md:right-10 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all z-50"
+                        className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all z-[12000]"
                         onClick={() => setActiveIndex(null)}
                     >
                         <i data-lucide="x" className="w-6 h-6"></i>
                     </button>
 
-                    {/* Navigation: Previous Arrow */}
                     <button 
-                        className="absolute left-4 md:left-8 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-50 group"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-[12000] group"
                         onClick={prevImage}
                     >
                         <i data-lucide="chevron-left" className="w-8 h-8 group-active:scale-90 transition-transform"></i>
                     </button>
 
-                    {/* Navigation: Next Arrow */}
                     <button 
-                        className="absolute right-4 md:right-8 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-50 group"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-[12000] group"
                         onClick={nextImage}
                     >
                         <i data-lucide="chevron-right" className="w-8 h-8 group-active:scale-90 transition-transform"></i>
                     </button>
 
-                    {/* Image Display */}
-                    <div className="relative w-full h-full flex items-center justify-center p-4 md:p-20">
-                        <img 
-                            src={photos[activeIndex]} 
-                            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-90 duration-300"
-                            alt={`Gallery image ${activeIndex + 1}`}
-                            onClick={(e) => e.stopPropagation()}
-                        />
+                    {/* Image Stage: This container ensures the image fits the screen */}
+                    <div className="relative flex-1 w-full h-full flex items-center justify-center p-4 md:p-12 lg:p-16 overflow-hidden">
+                        <div className="relative max-w-full max-h-full flex items-center justify-center">
+                            <img 
+                                src={photos[activeIndex]} 
+                                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-300 pointer-events-none"
+                                alt=""
+                                onContextMenu={preventCopy}
+                                onDragStart={preventCopy}
+                            />
+                            {/* Transparent Shield covering only the image area */}
+                            <div className="absolute inset-0 z-[11500] bg-transparent cursor-default"></div>
+                        </div>
                         
-                        {/* Image Counter Badge */}
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10">
-                            <p className="text-white text-xs font-bold tracking-widest uppercase">
+                        {/* Counter */}
+                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10 z-[12000]">
+                            <p className="text-white text-[10px] font-black tracking-[0.2em] uppercase">
                                 {activeIndex + 1} / {photos.length}
                             </p>
                         </div>
