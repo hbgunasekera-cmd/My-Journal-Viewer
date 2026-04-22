@@ -179,7 +179,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
     return R * c;
 };
 
-const PhotoGallery = React.memo(({ photos, onClose }) => {
+const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
     const [activeIndex, setActiveIndex] = React.useState(null);
     const [isSlideshowActive, setIsSlideshowActive] = React.useState(false);
 
@@ -190,7 +190,6 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
 
     // Helper to generate optimized URLs (Supabase Transformation)
     const getOptimizedUrl = (url, width, quality = 70) => {
-        // Only append if it's a Supabase URL and doesn't already have params
         if (url.includes('supabase.co') && !url.includes('?')) {
             return `${url}?width=${width}&quality=${quality}&format=webp`;
         }
@@ -258,32 +257,44 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
             onClick={(e) => e.stopPropagation()}
             onContextMenu={preventCopy}
         >
-            {/* Header */}
-            <div className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
+            {/* SEMANTIC HEADER: Replaced div with header */}
+            <header className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
                 <div>
-                    <h3 className="text-white font-black uppercase tracking-widest text-xs">Location Gallery</h3>
+                    <h3 className="text-white font-black uppercase tracking-widest text-xs">
+                        {placeName ? `${placeName} Gallery` : 'Location Gallery'}
+                    </h3>
                     <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
                 </div>
-                <button onClick={onClose} className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-grey rounded-full transition-all">
+                <button 
+                    onClick={onClose} 
+                    aria-label="Close Gallery"
+                    className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-grey rounded-full transition-all"
+                >
                     <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
-            </div>
+            </header>
 
-            {/* Grid View - Optimized with Thumbnails */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar">
+            {/* SEMANTIC MAIN: Replaced div with main for core gallery content */}
+            <main className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar">
                 <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {photos.map((url, i) => (
-                        <div key={i} onClick={() => setActiveIndex(i)} className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl cursor-zoom-in hover:scale-[1.02] transition-transform duration-300">
+                        /* SEMANTIC ARTICLE: Each photo is an independent content piece */
+                        <article 
+                            key={i} 
+                            onClick={() => setActiveIndex(i)} 
+                            className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl cursor-zoom-in hover:scale-[1.02] transition-transform duration-300"
+                        >
                             <img 
                                 src={getOptimizedUrl(url, 400, 60)} 
                                 className="w-full h-full object-cover select-none pointer-events-none" 
                                 loading="lazy" 
-                                alt="" 
+                                /* ACCESSIBILITY: Added descriptive alt text */
+                                alt={`Adventure capture ${i + 1} of ${placeName || 'the journey'}`} 
                             />
-                        </div>
+                        </article>
                     ))}
                 </div>
-            </div>
+            </main>
 
             {/* Full-Screen Overlay */}
             {activeIndex !== null && (
@@ -294,31 +305,43 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         <button 
                             className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${isSlideshowActive ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white/10 text-white'}`}
                             onClick={(e) => { e.stopPropagation(); setIsSlideshowActive(!isSlideshowActive); }}
+                            aria-label={isSlideshowActive ? "Pause Slideshow" : "Start Slideshow"}
                         >
                             <span key={isSlideshowActive ? 'pause-wrapper' : 'play-wrapper'}>
                                 <i data-lucide={isSlideshowActive ? "pause" : "play"} className="w-5 h-5"></i>
                             </span>
                         </button>
-                        <button className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all" onClick={() => setActiveIndex(null)}>
+                        <button 
+                            className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all" 
+                            onClick={() => setActiveIndex(null)}
+                            aria-label="Close Preview"
+                        >
                             <i data-lucide="x" className="w-6 h-6"></i>
                         </button>
                     </div>
 
-                    <button className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" onClick={(e) => { prevImage(e); setIsSlideshowActive(false); }}>
+                    <button 
+                        className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" 
+                        onClick={(e) => { prevImage(e); setIsSlideshowActive(false); }}
+                        aria-label="Previous Image"
+                    >
                         <i data-lucide="chevron-left" className="w-8 h-8"></i>
                     </button>
-                    <button className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" onClick={(e) => { nextImage(e); setIsSlideshowActive(false); }}>
+                    <button 
+                        className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" 
+                        onClick={(e) => { nextImage(e); setIsSlideshowActive(false); }}
+                        aria-label="Next Image"
+                    >
                         <i data-lucide="chevron-right" className="w-8 h-8"></i>
                     </button>
 
                     <div className="flex-1 w-full flex items-center justify-center p-4" onClick={() => setActiveIndex(null)}>
                         <div className="relative w-fit h-fit" onClick={(e) => e.stopPropagation()}>
-                            {/* High-quality but optimized for screen size (1200px instead of original 4000px+) */}
                             <img 
                                 key={photos[activeIndex]} 
                                 src={getOptimizedUrl(photos[activeIndex], 1200, 85)} 
                                 className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500" 
-                                alt="" 
+                                alt={`Full view of ${placeName || 'location'}`} 
                             />
                             
                             <div className="absolute bottom-6 right-6 pointer-events-none select-none">
@@ -332,9 +355,9 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                         </div>
                     </div>
                     
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/10 px-6 py-2 rounded-full border border-white/10 z-[12000]">
+                    <footer className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/10 px-6 py-2 rounded-full border border-white/10 z-[12000]">
                         <p className="text-white text-[10px] font-black tracking-[0.2em] uppercase">{activeIndex + 1} / {photos.length}</p>
-                    </div>
+                    </footer>
                 </div>
             )}
             
@@ -1795,17 +1818,21 @@ const clearSelectedRoute = () => {
                        
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
                         
- {/* Location Cards */}
-                           
+ {/* Location Cards Section */}
 {displayPlaces.map(place => (
-    <div key={place.id} className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl">
-        {/* Image Section */}
-        <div className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
+    /* SEMANTIC ARTICLE: Each card is now an independent content piece for SEO */
+    <article 
+        key={place.id} 
+        className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl"
+    >
+        {/* SEMANTIC HEADER: Contains the primary visual and title information */}
+        <header className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
             {place.cover_photo_url && (
                 <img 
                     src={place.cover_photo_url} 
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                    alt={place.place_name}
+                    /* ACCESSIBILITY: Improved alt text for image search discovery */
+                    alt={`Scenic view of ${place.place_name} in Sri Lanka`}
                 />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
@@ -1822,14 +1849,15 @@ const clearSelectedRoute = () => {
             </div>
 
             <div className="absolute bottom-3 left-4 pr-4">
+                {/* SEMANTIC H3: Maintains a clear heading hierarchy for search crawlers */}
                 <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
                     {auditLocationName(place.place_name)}
                 </h3>
             </div>
-        </div>
+        </header>
         
-        {/* Content Section */}
-        <div className="p-4 flex flex-col flex-1">
+        {/* SEMANTIC MAIN: Content area for metadata and user interactions */}
+        <main className="p-4 flex flex-col flex-1">
             <div className="flex justify-between items-start mb-1">
                 <div className="flex flex-col min-w-0">
                     <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
@@ -1841,106 +1869,90 @@ const clearSelectedRoute = () => {
                 </span>
             </div>
 
-            {/* Distance Display - Fixed with 4 coordinate arguments */}
+            {/* Distance Display */}
             <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
                 {userCoords 
                     ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY` 
                     : "Location Access Required"}
             </div>
 
-            {/* Interactions - Only visible if NOT pending */}
-{place.status !== 'pending' && (
-    <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-50">
-        {/* Like Button */}
-        <button 
-            onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
-            className="flex items-center gap-1.5 group outline-none select-none"
-        >
-            <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
-                <i data-lucide="heart" className={`w-4 h-4 ${likes[place.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`}></i>
-            </div>
-            <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
-        </button>
+            {/* Interactions Section */}
+            {place.status !== 'pending' && (
+                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-50">
+                    {/* Like Button */}
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
+                        className="flex items-center gap-1.5 group outline-none select-none"
+                        aria-label="Like this destination"
+                    >
+                        <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
+                            <i data-lucide="heart" className={`w-4 h-4 ${likes[place.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`}></i>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
+                    </button>
 
-        {/* Comment Button */}
-        <button 
-            onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setisArticleOpen(true); }}
-            className="flex items-center gap-1.5 group outline-none select-none"
-        >
-            <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
-                <i data-lucide="message-circle" className="w-4 h-4 text-slate-400"></i>
-            </div>
-            <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
-        </button>
-    </div>
-)}
+                    {/* Comment Button */}
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setisArticleOpen(true); }}
+                        className="flex items-center gap-1.5 group outline-none select-none"
+                        aria-label="View comments"
+                    >
+                        <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
+                            <i data-lucide="message-circle" className="w-4 h-4 text-slate-400"></i>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
+                    </button>
+                </div>
+            )}
 
-         {/* Action Buttons Container */} {/* grid-cols-4 */}
-<div className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
-    
-    {/* MAPS BUTTON - Soft Slate */}
-    {place.google_maps_url && (
-        <button 
-            onClick={() => window.open(place.google_maps_url, '_blank')}
-            className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all outline-none select-none border border-slate-100/50 group"
-            title="Open in Maps"
-        >
-            <i data-lucide="map" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
-            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
-        </button>
-    )}
-    
-    {/* GALLERY BUTTON - Soft Orange */}
-    {place.album_photos && (
-        <button 
-            onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setActiveId(place.id); 
-            }}
-            className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-90 transition-all outline-none select-none border border-orange-100/50 group"
-            title="View Photos"
-        >
-            <i data-lucide="image" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
-            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
-        </button>
-    )}
-    
-        
-    {/* VIDEO BUTTON - Soft Rose/Red
-    Deactivated/Commented Out:
-    {place.tiktok_urls && place.tiktok_urls.length > 0 && (
-        <button 
-            onClick={() => setActiveVideoId(place.id)}
-            className="flex flex-col items-center justify-center py-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 active:scale-90 transition-all outline-none select-none border border-rose-100/50 group"
-            title="Watch TikToks"
-        >
-            <i data-lucide="play" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
-            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Videos</span>
-        </button>
-    )} 
-*/}
-    
-   
-    
-    {/* READ BUTTON - Soft Emerald */}
-    {place.ai_article?.story && (
-        <button 
-            onClick={() => { 
-                if (typeof setViewingArticle === 'function') setViewingArticle(place); 
-                if (typeof setisArticleOpen === 'function') setisArticleOpen(true); 
-            }}
-            className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
-            title="Read Story"
-        >
-            <i data-lucide="book-open" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
-            <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
-        </button>
-    )}
-</div>
-             </div>
-            </div>
-           ))}
+            {/* Action Buttons Section */}
+            <footer className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
+                {/* MAPS BUTTON */}
+                {place.google_maps_url && (
+                    <button 
+                        onClick={() => window.open(place.google_maps_url, '_blank')}
+                        className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all outline-none select-none border border-slate-100/50 group"
+                        title="Open in Google Maps"
+                    >
+                        <i data-lucide="map" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+                        <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
+                    </button>
+                )}
+                
+                {/* GALLERY BUTTON */}
+                {place.album_photos && (
+                    <button 
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setActiveId(place.id); 
+                        }}
+                        className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-90 transition-all outline-none select-none border border-orange-100/50 group"
+                        title="View Photo Gallery"
+                    >
+                        <i data-lucide="image" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+                        <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
+                    </button>
+                )}
+                
+                {/* READ BUTTON */}
+                {place.ai_article?.story && (
+                    <button 
+                        onClick={() => { 
+                            if (typeof setViewingArticle === 'function') setViewingArticle(place); 
+                            if (typeof setisArticleOpen === 'function') setisArticleOpen(true); 
+                        }}
+                        className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
+                        title="Read Travel Story"
+                    >
+                        <i data-lucide="book-open" className="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+                        <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
+                    </button>
+                )}
+            </footer>
+        </main>
+    </article>
+))}
            
   {/* ADVERTISEMENT BLOCK - Integrated as a Grid Item */}
     <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
