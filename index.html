@@ -4,11 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📸</text></svg>">
-    <title>My Journal</title>
+    
+    <title>My Journal | Exploring Sri Lanka’s Hidden Gems</title>
+    <meta name="description" content="Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations. Explore interactive maps and travel stories.">
+    <meta name="keywords" content="Sri Lanka travel, waterfall hunting, trekking, drone photography, hiking trails, adventure travel">
+    <meta name="author" content="Hasitha Gunasekera">
 
-    <meta property="og:title" content="My Journal">
-    <meta property="og:description" content="Explore my travel bucket list and join the adventure.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://my-journal-viewer.vercel.app/">
+    <meta property="og:title" content="My Journal | Nature & Adventure Travel">
+    <meta property="og:description" content="Explore remote Sri Lankan trails, hidden waterfalls, and immersive 4K aerial views. Join the adventure through our interactive map.">
     <meta property="og:image" content="https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://my-journal-viewer.vercel.app/">
+    <meta name="twitter:title" content="My Journal | Sri Lanka Travel Viewer">
+    <meta name="twitter:description" content="Experience the journey through stunning drone footage and captures from the hidden gems of Sri Lanka.">
+    <meta name="twitter:image" content="https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Cover_Image/Landscape%20Cover.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -123,21 +135,15 @@
             -moz-user-select: none;
             -ms-user-select: none;
             user-select: none;
-            pointer-events: none; /* Globally prevent drag/context menu */
+            pointer-events: none;
         }
 
         /* Modal Locking */
         body.modal-open {
-            overflow: hidden;
+            overflow: hidden !important;
             position: fixed;
             width: 100%;
         }
-        
-        .modal-open {
-    overflow: hidden !important;
-    padding-right: 0px; /* Optional: adjust for scrollbar width jump */
-}
-
     </style>
 </head>
 
