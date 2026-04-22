@@ -175,31 +175,63 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 const PhotoGallery = React.memo(({ photos, onClose }) => {
     const [activeIndex, setActiveIndex] = React.useState(null);
+    const [isSlideshowActive, setIsSlideshowActive] = React.useState(false);
 
     const preventCopy = (e) => {
         e.preventDefault();
         return false;
     };
 
+    // Initialize/Cleanup logic
     useEffect(() => {
         const scrollY = window.scrollY;
         document.body.classList.add('modal-open');
-        if (window.lucide) window.lucide.createIcons();
+        
+        const refreshIcons = () => {
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        refreshIcons();
+
         return () => {
             document.body.classList.remove('modal-open');
             window.scrollTo(0, scrollY);
         };
     }, []);
 
+    // Handle Slideshow Timer
+    useEffect(() => {
+        let timer;
+        if (isSlideshowActive && activeIndex !== null) {
+            timer = setTimeout(() => {
+                nextImage();
+            }, 5000);
+        }
+        return () => clearTimeout(timer);
+    }, [isSlideshowActive, activeIndex]);
+
+    // Refresh Icons on State Change
+    useEffect(() => {
+        if (window.lucide) {
+            // Small delay ensures React has finished updating the DOM
+            const timeoutId = setTimeout(() => window.lucide.createIcons(), 0);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [isSlideshowActive, activeIndex]);
+
+    // Keyboard Controls
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (activeIndex === null) return;
-            if (e.key === 'ArrowRight') nextImage();
-            if (e.key === 'ArrowLeft') prevImage();
+            if (e.key === 'ArrowRight') { nextImage(); setIsSlideshowActive(false); }
+            if (e.key === 'ArrowLeft') { prevImage(e); setIsSlideshowActive(false); }
             if (e.key === 'Escape') setActiveIndex(null);
+            if (e.key === ' ') {
+                e.preventDefault();
+                setIsSlideshowActive(prev => !prev);
+            }
         };
         window.addEventListener('keydown', handleKeyDown);
-        if (window.lucide) window.lucide.createIcons();
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [activeIndex]);
 
@@ -228,64 +260,53 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                     <h3 className="text-white font-black uppercase tracking-widest text-xs">Location Gallery</h3>
                     <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
                 </div>
-                <button 
-                    onClick={onClose}
-                    className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-grey rounded-full transition-all"
-                >
+                <button onClick={onClose} className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-grey rounded-full transition-all">
                     <i data-lucide="x" className="w-6 h-6"></i>
                 </button>
             </div>
 
-            {/* Main Grid View */}
+            {/* Grid View */}
             <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar">
                 <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {photos.map((url, i) => (
-                        <div 
-                            key={i} 
-                            onClick={() => setActiveIndex(i)}
-                            className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl cursor-zoom-in hover:scale-[1.02] transition-transform duration-300"
-                        >
-                            <img 
-                                src={url} 
-                                className="w-full h-full object-cover select-none pointer-events-none" 
-                                style={{ WebkitTouchCallout: 'none' }}
-                                loading="lazy" 
-                                alt=""
-                            />
-                            <div className="absolute inset-0 z-10 bg-transparent touch-none"></div>
+                        <div key={i} onClick={() => setActiveIndex(i)} className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl cursor-zoom-in hover:scale-[1.02] transition-transform duration-300">
+                            <img src={url} className="w-full h-full object-cover select-none pointer-events-none" loading="lazy" alt="" />
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* Full-Screen Viewer Overlay */}
+            {/* Full-Screen Overlay */}
             {activeIndex !== null && (
-                <div 
-                    className="fixed inset-0 z-[11000] bg-black/95 backdrop-blur-2xl flex flex-col animate-in zoom-in-95 duration-200"
-                    onClick={() => setActiveIndex(null)}
-                    onContextMenu={preventCopy}
-                >
-                    {/* Navigation UI */}
-                    <button className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all z-[12000]" onClick={() => setActiveIndex(null)}>
-                        <i data-lucide="x" className="w-6 h-6"></i>
+                <div className="fixed inset-0 z-[11000] bg-black/95 backdrop-blur-2xl flex flex-col animate-in zoom-in-95 duration-200" onContextMenu={preventCopy}>
+                    {isSlideshowActive && <div className="absolute top-0 left-0 h-1 bg-indigo-500 z-[12001] animate-[progress_5s_linear_infinite]"></div>}
+
+                    <div className="absolute top-6 right-6 flex gap-3 z-[12000]">
+                        <button 
+                            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${isSlideshowActive ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white/10 text-white'}`}
+                            onClick={(e) => { e.stopPropagation(); setIsSlideshowActive(!isSlideshowActive); }}
+                        >
+                            {/* FIX: Wrap the icon in a keyed span to prevent Node.removeChild error */}
+                            <span key={isSlideshowActive ? 'pause-wrapper' : 'play-wrapper'}>
+                                <i data-lucide={isSlideshowActive ? "pause" : "play"} className="w-5 h-5"></i>
+                            </span>
+                        </button>
+                        <button className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all" onClick={() => setActiveIndex(null)}>
+                            <i data-lucide="x" className="w-6 h-6"></i>
+                        </button>
+                    </div>
+
+                    <button className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" onClick={(e) => { prevImage(e); setIsSlideshowActive(false); }}>
+                        <i data-lucide="chevron-left" className="w-8 h-8"></i>
                     </button>
-                    <button className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-[12000] group" onClick={prevImage}>
-                        <i data-lucide="chevron-left" className="w-8 h-8 group-active:scale-90 transition-transform"></i>
-                    </button>
-                    <button className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-[12000] group" onClick={nextImage}>
-                        <i data-lucide="chevron-right" className="w-8 h-8 group-active:scale-90 transition-transform"></i>
+                    <button className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" onClick={(e) => { nextImage(e); setIsSlideshowActive(false); }}>
+                        <i data-lucide="chevron-right" className="w-8 h-8"></i>
                     </button>
 
-                    <div className="flex-1 w-full flex items-center justify-center p-4 md:p-12 lg:p-16">
-                        <div className="relative w-fit h-fit flex items-center justify-center">
-                            <img 
-                                src={photos[activeIndex]} 
-                                className="max-w-full max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-300 pointer-events-none select-none touch-none"
-                                style={{ WebkitTouchCallout: 'none' }}
-                                alt=""
-                            />
+                    <div className="flex-1 w-full flex items-center justify-center p-4" onClick={() => setActiveIndex(null)}>
+                        <div className="relative w-fit h-fit" onClick={(e) => e.stopPropagation()}>
+                            <img key={photos[activeIndex]} src={photos[activeIndex]} className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500" alt="" />
                             
-                            {/* Improved Visibility Watermark */}
                             <div className="absolute bottom-6 right-6 pointer-events-none select-none">
                                 <div className="flex flex-col items-end drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                                     <span className="text-[10px] md:text-xs font-light tracking-[0.4em] text-white/70 uppercase border-b border-white/30 pb-0.5">
@@ -294,18 +315,19 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                                     <div className="w-4 h-[0.5px] bg-white/30 mt-0.5"></div>
                                 </div>
                             </div>
-
-                            <div className="absolute inset-0 z-[11500] bg-transparent cursor-default touch-none"></div>
                         </div>
                     </div>
                     
-                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl px-6 py-2 rounded-full border border-white/10 z-[12000]">
-                        <p className="text-white text-[10px] font-black tracking-[0.2em] uppercase">
-                            {activeIndex + 1} / {photos.length}
-                        </p>
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/10 px-6 py-2 rounded-full border border-white/10 z-[12000]">
+                        <p className="text-white text-[10px] font-black tracking-[0.2em] uppercase">{activeIndex + 1} / {photos.length}</p>
                     </div>
                 </div>
             )}
+            
+            <style>{`
+                @keyframes progress { from { width: 0%; } to { width: 100%; } }
+                .modal-open { overflow: hidden !important; }
+            `}</style>
         </div>
     );
 });
