@@ -182,24 +182,25 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
         return false;
     };
 
-    // Initialize/Cleanup logic
+    // Helper to generate optimized URLs (Supabase Transformation)
+    const getOptimizedUrl = (url, width, quality = 70) => {
+        // Only append if it's a Supabase URL and doesn't already have params
+        if (url.includes('supabase.co') && !url.includes('?')) {
+            return `${url}?width=${width}&quality=${quality}&format=webp`;
+        }
+        return url;
+    };
+
     useEffect(() => {
         const scrollY = window.scrollY;
         document.body.classList.add('modal-open');
-        
-        const refreshIcons = () => {
-            if (window.lucide) window.lucide.createIcons();
-        };
-
-        refreshIcons();
-
+        if (window.lucide) window.lucide.createIcons();
         return () => {
             document.body.classList.remove('modal-open');
             window.scrollTo(0, scrollY);
         };
     }, []);
 
-    // Handle Slideshow Timer
     useEffect(() => {
         let timer;
         if (isSlideshowActive && activeIndex !== null) {
@@ -210,16 +211,13 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
         return () => clearTimeout(timer);
     }, [isSlideshowActive, activeIndex]);
 
-    // Refresh Icons on State Change
     useEffect(() => {
         if (window.lucide) {
-            // Small delay ensures React has finished updating the DOM
             const timeoutId = setTimeout(() => window.lucide.createIcons(), 0);
             return () => clearTimeout(timeoutId);
         }
     }, [isSlideshowActive, activeIndex]);
 
-    // Keyboard Controls
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (activeIndex === null) return;
@@ -265,12 +263,17 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                 </button>
             </div>
 
-            {/* Grid View */}
+            {/* Grid View - Optimized with Thumbnails */}
             <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar">
                 <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {photos.map((url, i) => (
                         <div key={i} onClick={() => setActiveIndex(i)} className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl cursor-zoom-in hover:scale-[1.02] transition-transform duration-300">
-                            <img src={url} className="w-full h-full object-cover select-none pointer-events-none" loading="lazy" alt="" />
+                            <img 
+                                src={getOptimizedUrl(url, 400, 60)} 
+                                className="w-full h-full object-cover select-none pointer-events-none" 
+                                loading="lazy" 
+                                alt="" 
+                            />
                         </div>
                     ))}
                 </div>
@@ -286,7 +289,6 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
                             className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${isSlideshowActive ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white/10 text-white'}`}
                             onClick={(e) => { e.stopPropagation(); setIsSlideshowActive(!isSlideshowActive); }}
                         >
-                            {/* FIX: Wrap the icon in a keyed span to prevent Node.removeChild error */}
                             <span key={isSlideshowActive ? 'pause-wrapper' : 'play-wrapper'}>
                                 <i data-lucide={isSlideshowActive ? "pause" : "play"} className="w-5 h-5"></i>
                             </span>
@@ -305,7 +307,13 @@ const PhotoGallery = React.memo(({ photos, onClose }) => {
 
                     <div className="flex-1 w-full flex items-center justify-center p-4" onClick={() => setActiveIndex(null)}>
                         <div className="relative w-fit h-fit" onClick={(e) => e.stopPropagation()}>
-                            <img key={photos[activeIndex]} src={photos[activeIndex]} className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500" alt="" />
+                            {/* High-quality but optimized for screen size (1200px instead of original 4000px+) */}
+                            <img 
+                                key={photos[activeIndex]} 
+                                src={getOptimizedUrl(photos[activeIndex], 1200, 85)} 
+                                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500" 
+                                alt="" 
+                            />
                             
                             <div className="absolute bottom-6 right-6 pointer-events-none select-none">
                                 <div className="flex flex-col items-end drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
