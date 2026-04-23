@@ -890,15 +890,32 @@ const handleReset = () => {
     
 };
 
+// DEEP LINKING: 
+React.useEffect(() => {
+    if (places.length > 0) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const placeFromUrl = urlParams.get('place');
+        
+        if (placeFromUrl) {
+            const target = places.find(p => p.place_name === placeFromUrl);
+            if (target) {
+                setViewingArticle(target);
+                setisArticleOpen(true);
+            }
+        }
+    }
+}, [places]); 
+
+
 React.useEffect(() => {
     if (ViewingArticle) {
-        // When viewing a specific waterfall or trek
+        
         updateSEO(
             ViewingArticle.place_name, 
             ViewingArticle.description || `Explore ${ViewingArticle.place_name} in ${ViewingArticle.district}, Sri Lanka.`
         );
     } else {
-        // Landing Page / Default state
+      
         updateSEO(
             "My Journal", 
             "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations."
@@ -1489,22 +1506,6 @@ React.useEffect(() => {
     }
 
 }, [isPlannerOpen, debouncedPlannerSearch, places]);
-
-
-React.useEffect(() => {
-    if (places.length > 0) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const placeFromUrl = urlParams.get('place');
-        
-        if (placeFromUrl) {
-            const targetPlace = places.find(p => p.place_name === placeFromUrl);
-            if (targetPlace) {
-                setViewingArticle(targetPlace);
-                setisArticleOpen(true);
-            }
-        }
-    }
-}, [places]);
 
 
 
