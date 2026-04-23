@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://my-journal-viewer.vercel.app/sitemap.xml
