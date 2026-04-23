@@ -72,10 +72,12 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
         
         .scrollable-list {
-            height: calc(100vh - 280px);
-            overflow-y: auto;
-            scrollbar-width: thin;
-        }
+    height: calc(100vh - 280px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+    padding-bottom: 2rem;
+}
 
         .text-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
         
@@ -518,6 +520,7 @@ function useDebounce(value, delay = 300) {
    function App() {
             
     const [places, setPlaces] = useState([]);
+    const [visibleCount, setVisibleCount] = useState(20);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -560,6 +563,8 @@ function useDebounce(value, delay = 300) {
     category: 'Waterfall'
     });
     
+    
+    
     const debouncedSearch = useDebounce(searchTerm, 300);
     const debouncedPlannerSearch = useDebounce(plannerSearch, 300);
 
@@ -577,7 +582,7 @@ function useDebounce(value, delay = 300) {
     const [nearbyAttractions, setNearbyAttractions] = React.useState([]);
     const [notifications, setNotifications] = React.useState([]);
     
-    
+       
  
     
 // 1. Unified Initialization & Location Logic
@@ -630,6 +635,42 @@ useEffect(() => {
         clearTimeout(iconTimer);
     };
 }, []);
+
+// 1. Define the filtering logic first
+const filteredPlaces = useMemo(() => {
+    return places.filter(place => {
+        const matchesSearch = place.place_name?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                            place.district?.toLowerCase().includes(debouncedSearch.toLowerCase());
+        const matchesCategory = selectedCategory === 'All' || place.category === selectedCategory;
+        
+        // Match the status filter (done/backlog) based on your app's current tab
+        const matchesStatus = place.status === statusFilter;
+
+        return matchesSearch && matchesCategory && matchesStatus;
+    });
+}, [places, debouncedSearch, selectedCategory, statusFilter]);
+
+// 2. Then define the visible (virtualized) subset
+const displayedPlaces = useMemo(() => {
+    return filteredPlaces.slice(0, visibleCount);
+}, [filteredPlaces, visibleCount]);
+
+// --- 3. Scroll Handler ---
+const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    // Load more when user is 150px from the bottom
+    if (scrollHeight - scrollTop <= clientHeight + 150) {
+        if (visibleCount < filteredPlaces.length) {
+            setVisibleCount(prev => prev + 20);
+        }
+    }
+};
+
+// Reset scroll count when filters change
+React.useEffect(() => {
+    setVisibleCount(20);
+}, [selectedCategory, debouncedSearch, statusFilter]);
+
 
 const showToast = React.useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -1910,8 +1951,7 @@ const clearSelectedRoute = () => {
     </div>
 </div>
 
-                    <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
-                       
+  <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">                       
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
                         
 {/* Location Cards Section */}
