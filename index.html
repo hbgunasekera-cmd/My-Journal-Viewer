@@ -168,6 +168,27 @@
         .trim();
 };
 
+function updateSEO(title, description) {
+    // Prevent "My Journal | My Journal" by checking if title is the site name
+    const siteName = "My Journal";
+    document.title = title === siteName ? siteName : `${title} | ${siteName}`;
+
+    // Updates the meta description for search engines
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+        metaDescription.setAttribute('content', description);
+    }
+
+    // Updates Open Graph tags for social media (Facebook/WhatsApp)
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    
+    if (ogTitle) ogTitle.setAttribute('content', title);
+    if (ogDesc) ogDesc.setAttribute('content', description);
+}
+
+
+
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Radius of the earth in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -758,6 +779,7 @@ React.useEffect(() => {
     };
 }, [mapRef.current]);
 
+
 const placesWithDistance = React.useMemo(() => {
     if (!userCoords) return places;
     return places.map(p => ({
@@ -867,6 +889,22 @@ const handleReset = () => {
     setToggles({ lodging: false, gas_station: false, restaurant: false });
     
 };
+
+React.useEffect(() => {
+    if (ViewingArticle) {
+        // When viewing a specific waterfall or trek
+        updateSEO(
+            ViewingArticle.place_name, 
+            ViewingArticle.description || `Explore ${ViewingArticle.place_name} in ${ViewingArticle.district}, Sri Lanka.`
+        );
+    } else {
+        // Landing Page / Default state
+        updateSEO(
+            "My Journal", 
+            "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations."
+        );
+    }
+}, [ViewingArticle]);
 
 
 // 2. Weather Fetching Logic (Optimized for Speed)
@@ -1282,6 +1320,8 @@ const shareRoute = () => {
 
 
 
+
+
 useEffect(() => {
     if (isAddOpen) {
     
@@ -1449,6 +1489,22 @@ React.useEffect(() => {
     }
 
 }, [isPlannerOpen, debouncedPlannerSearch, places]);
+
+
+React.useEffect(() => {
+    if (places.length > 0) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const placeFromUrl = urlParams.get('place');
+        
+        if (placeFromUrl) {
+            const targetPlace = places.find(p => p.place_name === placeFromUrl);
+            if (targetPlace) {
+                setViewingArticle(targetPlace);
+                setisArticleOpen(true);
+            }
+        }
+    }
+}, [places]);
 
 
 
@@ -1990,7 +2046,10 @@ const clearSelectedRoute = () => {
                    {isArticleOpen && ViewingArticle && (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
         {/* Backdrop */}
-        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => setisArticleOpen(false)}></div>
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => {
+        setisArticleOpen(false);
+        setViewingArticle(null);
+    }}></div>
         
         <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Header Image */}
@@ -1998,7 +2057,10 @@ const clearSelectedRoute = () => {
                 <img src={ViewingArticle.cover_photo_url} className="h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                 <button 
-                    onClick={() => setisArticleOpen(false)}
+                    onClick={() => {
+        setisArticleOpen(false);
+        setViewingArticle(null);
+    }}
                     className="absolute top-6 right-6 w-10 h-10 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all"
                 >
                     <i data-lucide="x" className="w-5 h-5"></i>
@@ -2119,7 +2181,10 @@ const clearSelectedRoute = () => {
                     </div>
                 </div>
 
-                <button onClick={() => setisArticleOpen(false)} className="mt-8 w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-colors">Close Journal</button>
+                <button onClick={() => {
+        setisArticleOpen(false);
+        setViewingArticle(null);
+    }} className="mt-8 w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-colors">Close Journal</button>
             </div>
         </div>
     </div>
