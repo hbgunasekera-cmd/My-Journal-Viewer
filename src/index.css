@@ -1,0 +1,47 @@
+@import "tailwindcss"; /* This replaces base, components, and utilities in v4 */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+
+/* Base Styles */
+html, body, #root {
+    height: 100%;
+    margin: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* ANTI-COPY & IMAGE PROTECTION
+   Prevents long-press "Save Image" on mobile and context menus on desktop.
+*/
+@layer base {
+    /* Apply to the whole app to prevent text/image selection */
+    .no-copy {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none; /* Disables iOS Save Image menu */
+    }
+
+    /* Global image protection */
+    img {
+        -webkit-user-drag: none; /* Prevents dragging image to desktop or other tabs */
+        user-drag: none;
+        pointer-events: none; /* Makes the image "untouchable" so the shield handles interaction */
+    }
+
+    /* Remove the gray highlight overlay when tapping on mobile */
+    .touch-none {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+    }
+}
+
+/* Custom Scrollbar for the Gallery */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
