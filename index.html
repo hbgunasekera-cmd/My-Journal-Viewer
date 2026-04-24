@@ -247,7 +247,7 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
         return false;
     };
 
-    // Handle body scroll locking
+    // Handle body scroll locking & initial icon render
     React.useEffect(() => {
         const scrollY = window.scrollY;
         document.body.classList.add('modal-open');
@@ -269,7 +269,7 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
         return () => clearTimeout(timer);
     }, [isSlideshowActive, activeIndex]);
 
-    // Icon Refresh Logic - Ensures Lucide re-scans the DOM when the Play/Pause state changes
+    // Icon Refresh Logic - Ensures Lucide re-scans the DOM when state changes
     React.useEffect(() => {
         if (window.lucide) {
             const timeoutId = setTimeout(() => window.lucide.createIcons(), 0);
@@ -315,7 +315,7 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
             {/* HEADER */}
             <header className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
                 <div>
-                    <h3 className="text-white font-black uppercase tracking-widest text-xs">
+                    <h3 className="text-grey font-black uppercase tracking-widest text-xs">
                         {placeName ? `${placeName} Gallery` : 'Location Gallery'}
                     </h3>
                     <p className="text-[10px] text-indigo-400 font-bold uppercase">{photos.length} Total Images</p>
@@ -339,10 +339,8 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                             className="group relative aspect-[4/5] rounded-[2rem] overflow-hidden bg-slate-800 border border-white/5 shadow-2xl cursor-zoom-in hover:scale-[1.02] transition-transform duration-300"
                         >
                             <img 
-                                /* PHASE 4 FIX: Optimization Utility applied for Grid Thumbnails */
                                 src={getOptimizedUrl(url, 400, 60)} 
                                 className="w-full h-full object-cover select-none pointer-events-none" 
-                                /* PHASE 4 FIX: Lazy loading enabled for off-screen images */
                                 loading="lazy" 
                                 alt={`${placeName || 'Adventure'} - Image ${i + 1}`} 
                             />
@@ -362,7 +360,6 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                             onClick={(e) => { e.stopPropagation(); setIsSlideshowActive(!isSlideshowActive); }}
                             aria-label={isSlideshowActive ? "Pause Slideshow" : "Start Slideshow"}
                         >
-                            {/* Keyed span forces icon refresh when state changes */}
                             <span key={isSlideshowActive ? 'pause' : 'play'}>
                                 <i data-lucide={isSlideshowActive ? "pause" : "play"} className="w-5 h-5"></i>
                             </span>
@@ -370,7 +367,6 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                         <button 
                             className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all" 
                             onClick={() => setActiveIndex(null)}
-                            aria-label="Close Preview"
                         >
                             <i data-lucide="x" className="w-6 h-6"></i>
                         </button>
@@ -379,14 +375,12 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                     <button 
                         className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" 
                         onClick={(e) => { prevImage(e); setIsSlideshowActive(false); }}
-                        aria-label="Previous Image"
                     >
                         <i data-lucide="chevron-left" className="w-8 h-8"></i>
                     </button>
                     <button 
                         className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/20 text-white rounded-full transition-all z-[12000]" 
                         onClick={(e) => { nextImage(e); setIsSlideshowActive(false); }}
-                        aria-label="Next Image"
                     >
                         <i data-lucide="chevron-right" className="w-8 h-8"></i>
                     </button>
@@ -395,13 +389,12 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                         <div className="relative w-fit h-fit" onClick={(e) => e.stopPropagation()}>
                             <img 
                                 key={photos[activeIndex]} 
-                                /* PHASE 4 FIX: Optimization Utility for high-res preview */
                                 src={getOptimizedUrl(photos[activeIndex], 1200, 85)} 
                                 className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500" 
                                 alt={`${placeName || 'Gallery'} featured view`} 
-                                /* PHASE 4 FIX: fetchpriority="high" for immediate LCP improvement */
                                 fetchpriority="high"
                             />
+                            {/* Signature Watermark */}
                             <div className="absolute bottom-6 right-6 pointer-events-none select-none">
                                 <div className="flex flex-col items-end drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                                     <span className="text-[10px] md:text-xs font-light tracking-[0.4em] text-white/70 uppercase border-b border-white/30 pb-0.5">
@@ -422,6 +415,9 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
             <style>{`
                 @keyframes progress { from { width: 0%; } to { width: 100%; } }
                 .modal-open { overflow: hidden !important; }
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
             `}</style>
         </div>
     );
