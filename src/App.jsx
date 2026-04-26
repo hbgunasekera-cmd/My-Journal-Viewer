@@ -1,17 +1,33 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
 import { createClient } from '@supabase/supabase-js';
+
+// --- Leaflet Imports ---
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-routing-machine';
+
+// --- Icon Imports ---
 import {
   Play, Pause, ChevronLeft, ChevronRight, SlidersHorizontal,
   Share2, Plus, ChevronDown, Heart, MessageCircle,
   Image as ImageIcon, BookOpen, MapPin, Send,
   Navigation, RefreshCw, Search, Minus, QrCode, AlertCircle,
   Camera, Video, Info, Map as MapIcon,
-  X, CheckCircle2 // <--- Add these two
+  X, CheckCircle2
 } from 'lucide-react';
 
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-routing-machine';
+// --- Leaflet Marker Fix (Crucial for Vite) ---
+if (typeof window !== 'undefined') {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  });
+}
+
+// NOTE: Leaflet imports are REMOVED from here and moved to src/components/Map.jsx
+// to ensure lazy loading actually works and improves PageSpeed.
 
 // Configuration
 const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
@@ -19,32 +35,36 @@ const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
 
-// Leaflet Marker Fix (Necessary for Vite)
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-
-
-
-
+// Constants
 const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
 const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
 
+
+
+/**
+ * SEO & Performance Helpers
+ */
 const auditLocationName = (name) => {
   if (!name) return "Unnamed Location";
-  return String(name)
-    .replace(/[^a-zA-Z0-9\s\-'\.]/g, '')
-    .trim();
+  return String(name).replace(/[^a-zA-Z0-9\s\-'\.]/g, '').trim();
 };
 
+const getOptimizedUrl = (url, width, quality = 70) => {
+  if (url?.includes('supabase.co') && !url.includes('?')) {
+    return `${url}?width=${width}&quality=${quality}&format=webp`;
+  }
+  return url;
+};
+
+
+
+/**
+ * Icon & UI Components
+ */
 const IconMap = {
   'camera': Camera,
   'video': Video,
-  'map': MapIcon, // This now works because MapIcon is defined above
+  'map': MapIcon,
   'book-open': BookOpen,
   'image': ImageIcon
 };
@@ -104,13 +124,51 @@ function updateSEO(title, description, image) {
   schemaScript.text = JSON.stringify(schemaData);
 }
 
-const getOptimizedUrl = (url, width, quality = 70) => {
-  if (url && url.includes('supabase.co') && !url.includes('?')) {
-    return `${url}?width=${width}&quality=${quality}&format=webp`;
-  }
-  return url;
-};
 
+const MapSelectionComponent = React.memo(({ onLocationSelect, initialCoords, onMapReady }) => {
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markerRef = useRef(null);
+
+  useEffect(() => {
+    // STABILITY GUARD: If map exists, do nothing.
+    if (mapInstance.current || !mapRef.current) return;
+
+    mapInstance.current = L.map(mapRef.current, {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([initialCoords?.lat || 7.8731, initialCoords?.lng || 80.7718], 8);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(mapInstance.current);
+
+    // --- NEW: Pass the Leaflet instance back to App.jsx so Autocomplete can use it ---
+    if (onMapReady) {
+      onMapReady(mapInstance.current);
+    }
+
+    mapInstance.current.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      if (markerRef.current) {
+        markerRef.current.setLatLng(e.latlng);
+      } else {
+        markerRef.current = L.marker(e.latlng).addTo(mapInstance.current);
+      }
+      onLocationSelect(lat.toFixed(6), lng.toFixed(6));
+    });
+
+    return () => {
+      if (mapInstance.current) {
+        mapInstance.current.off();
+        mapInstance.current.remove();
+        mapInstance.current = null;
+      }
+    };
+  }, [initialCoords, onLocationSelect, onMapReady]); // Added dependencies
+
+  return <div ref={mapRef} style={{ height: '100%', width: '100%' }} />;
+});
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371; // Radius of the earth in km
@@ -411,8 +469,193 @@ function useDebounce(value, delay = 300) {
   return debouncedValue;
 }
 
+// --- CONSOLIDATED MAP COMPONENT ---
+const MapComponent = ({
+  places,
+  userCoords,
+  selectedRoute,
+  hoveredPlaceId,
+  setHoveredPlaceId,
+  fetchAttractions,
+  setRouteDistance,
+  setRouteData // Ensure this prop is passed from App.jsx to store path coordinates
+}) => {
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const routingControl = useRef(null);
+  const markerRegistryRef = useRef({});
+  const currentRouteIdsRef = useRef("");
+  const tempMarkerRef = useRef(null);
+
+  // 1. Initialize Map
+  useEffect(() => {
+    if (!mapInstance.current && mapRef.current) {
+      mapInstance.current = L.map(mapRef.current, {
+        zoomControl: false,
+        attributionControl: true,
+        worldCopyJump: true
+      }).setView([userCoords?.lat || 7.8731, userCoords?.lng || 80.7718], 10);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(mapInstance.current);
+    }
+
+    return () => {
+      if (mapInstance.current) {
+        mapInstance.current.remove();
+        mapInstance.current = null;
+        markerRegistryRef.current = {};
+        currentRouteIdsRef.current = "";
+      }
+    };
+  }, []);
+
+  // 2. Map Click Handler
+  useEffect(() => {
+    if (!mapInstance.current) return;
+
+    const onMapClick = (e) => {
+      const { lat, lng } = e.latlng;
+      if (fetchAttractions) fetchAttractions(lat, lng);
+
+      if (tempMarkerRef.current && mapInstance.current) {
+        mapInstance.current.removeLayer(tempMarkerRef.current);
+      }
+
+      tempMarkerRef.current = L.circleMarker([lat, lng], {
+        radius: 8,
+        fillColor: "#3b82f6",
+        color: "#fff",
+        weight: 2,
+        fillOpacity: 0.5
+      }).addTo(mapInstance.current);
+    };
+
+    mapInstance.current.on('click', onMapClick);
+    return () => {
+      if (mapInstance.current) mapInstance.current.off('click', onMapClick);
+    };
+  }, [fetchAttractions]);
+
+  // 3. Handle Markers & Hover States
+  useEffect(() => {
+    if (!mapInstance.current) return;
+
+    places.forEach(place => {
+      const isHovered = hoveredPlaceId === place.id;
+      const isSelected = selectedRoute.find(p => p.id === place.id);
+      const markerColor = isHovered ? "#3b82f6" : isSelected ? "#ef4444" : place.status === 'done' ? "#10b981" : "#f97316";
+
+      if (!markerRegistryRef.current[place.id]) {
+        const marker = L.circleMarker([place.latitude, place.longitude], {
+          radius: 6,
+          fillColor: markerColor,
+          color: "#fff",
+          weight: 2,
+          fillOpacity: 1
+        }).addTo(mapInstance.current);
+
+        marker.bindTooltip(place.place_name, { direction: 'top', offset: [0, -5] });
+
+        marker.on('click', () => {
+          if (setHoveredPlaceId) setHoveredPlaceId(place.id);
+          const lat = parseFloat(place.latitude);
+          const lng = parseFloat(place.longitude);
+          if (fetchAttractions) fetchAttractions(lat, lng);
+        });
+        markerRegistryRef.current[place.id] = marker;
+      } else {
+        const marker = markerRegistryRef.current[place.id];
+        marker.setStyle({ fillColor: markerColor, radius: isHovered ? 9 : 6 });
+        if (isHovered || isSelected) marker.bringToFront();
+      }
+    });
+  }, [places, selectedRoute, hoveredPlaceId, setHoveredPlaceId, fetchAttractions]);
+
+  // --- 4. Handle Routing & Legend Suppression (Hardened) ---
+  
+  useEffect(() => {
+    // Basic safety check: ensure the map exists
+    if (!mapInstance.current) return;
+
+    // Create a signature to check if the route has actually changed
+    const routeSignature = selectedRoute.map(p => p.id).join(',');
+    
+    if (currentRouteIdsRef.current !== routeSignature) {
+      currentRouteIdsRef.current = routeSignature;
+
+      if (selectedRoute.length > 0 && userCoords) {
+        const waypoints = [
+          L.latLng(userCoords.lat, userCoords.lng),
+          ...selectedRoute.map(p => L.latLng(p.latitude, p.longitude))
+        ];
+
+        if (routingControl.current) {
+          // If the control already exists, just update the points
+          routingControl.current.setWaypoints(waypoints);
+        } else {
+          // Initialize the Routing Control
+          routingControl.current = L.Routing.control({
+            waypoints,
+            router: L.Routing.osrmv1({ 
+              serviceUrl: 'https://router.project-osrm.org/route/v1' 
+            }),
+            lineOptions: { 
+              styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }] 
+            },
+            createMarker: () => null, // Hide the default A/B markers
+            addWaypoints: false,
+            show: false, // Initial instruction panel hide
+            fitSelectedRoutes: true
+          }).on('routesfound', (e) => {
+            const route = e.routes[0];
+            const distance = (route.summary.totalDistance / 1000).toFixed(1);
+            
+            // 1. Update the UI distance
+            if (setRouteDistance) setRouteDistance(distance);
+
+            // 2. CRITICAL FIX: Share route coordinates with App.jsx
+            // This allows toggleNearby (Food/Gas/Hotels) to find points along the path
+            if (setRouteData) {
+              setRouteData({
+                coordinates: route.coordinates,
+                distance: distance,
+                duration: Math.round(route.summary.totalTime / 60)
+              });
+            }
+          }).addTo(mapInstance.current);
+
+          // SLEDGEHAMMER HIDE FOR LEGEND:
+          // getContainer() is the standard way to grab the HTML element
+          const container = routingControl.current.getContainer();
+          if (container) {
+            container.style.display = 'none';
+          }
+        }
+      } else if (routingControl.current) {
+        // CLEANUP: Prevent "_map is null" crash during unmounting
+        if (mapInstance.current) {
+          try {
+            mapInstance.current.removeControl(routingControl.current);
+          } catch (e) {
+            console.warn("Routing cleanup suppressed to avoid Leaflet race condition.");
+          }
+        }
+        routingControl.current = null;
+        if (setRouteDistance) setRouteDistance(0);
+        if (setRouteData) setRouteData(null);
+      }
+    }
+  }, [selectedRoute, userCoords, setRouteDistance, setRouteData]);
+
+  return <div ref={mapRef} className="h-full w-full z-0" />;
+};
+
 function App() {
 
+  // --- 1. Core Data & UI State ---
   const [places, setPlaces] = useState([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
@@ -420,32 +663,36 @@ function App() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isArticleOpen, setisArticleOpen] = useState(false);
   const [ViewingArticle, setViewingArticle] = useState(null);
+  const [filterTag, setFilterTag] = useState('All');
+  const [sortBy, setSortBy] = useState('recent');
+  const [statusFilter, setStatusFilter] = React.useState('done');
+
+  // --- 2. Adventure Engine & Planner State ---
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState([]);
+  const [isEngineOpen, setIsEngineOpen] = React.useState(false);
+  const [plannerSearch, setPlannerSearch] = React.useState('');
+  const [selectedRoute, setSelectedRoute] = useState([]);  
+  const [routeData, setRouteData] = useState(null);
+  const [routeDistance, setRouteDistance] = useState(0);
   const [userCoords, setUserCoords] = useState(null);
   const [hoveredPlaceId, setHoveredPlaceId] = useState(null);
-  const [filterTag, setFilterTag] = useState('All');
+
+  // --- 3. Social & Interactions ---
+  const [isSocialOpen, setIsSocialOpen] = React.useState(false);
   const [likes, setLikes] = useState({});
   const [comments, setComments] = useState({});
   const [NewCommentText, setNewCommentText] = useState('');
-  const [sortBy, setSortBy] = useState('recent');
-  const [routeDistance, setRouteDistance] = useState(0);
-  const [isAddOpen, setisAddOpen] = useState(false);
-  const [plannerSearch, setPlannerSearch] = React.useState('');
+  const [notifications, setNotifications] = React.useState([]);
+
+  // --- 4. Navigation & FAB (Floating Action Button) ---
   const [isFabExpanded, setIsFabExpanded] = React.useState(false);
   const [isSocialExpanded, setIsSocialExpanded] = React.useState(false);
   const [isAddExpanded, setIsAddExpanded] = React.useState(false);
-  const [statusFilter, setStatusFilter] = React.useState('done');
-  const mapRef = useRef(null);
-  const tempMarkerRef = useRef(null);
-  const addMapRef = useRef(null);
-  const markerRegistryRef = useRef({});
-  const routingControlRef = useRef(null);
-  const currentRouteIdsRef = useRef("");
-  const autocompleteRef = useRef(null);;
-  const [isEngineOpen, setIsEngineOpen] = React.useState(false);
-  const [isSocialOpen, setIsSocialOpen] = React.useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = React.useState(false);
+
+  // --- 5. Add Location & Form State ---
+  const [isAddOpen, setisAddOpen] = useState(false);
+  const [addMapInstance, setAddMapInstance] = useState(null);
   const [formData, setFormData] = useState({
     place_name: '',
     district: '',
@@ -457,52 +704,50 @@ function App() {
     category: 'Waterfall'
   });
 
-
-
-  const debouncedSearch = useDebounce(searchTerm, 300);
-  const debouncedPlannerSearch = useDebounce(plannerSearch, 300);
-
+  // --- 6. Media & Weather State ---
   const [weatherData, setWeatherData] = React.useState({});
   const [activeGallery, setActiveGallery] = useState(null);
   const [activeGalleryId, setActiveGalleryId] = useState(null);
   const [activeVideoId, setActiveVideoId] = useState(null);
   const [activeId, setActiveId] = useState(null);
-  const nearbyMarkersRef = React.useRef([]);
+
+  // --- 7. Map Controls & Nearby Logic ---
+  const [nearbyAttractions, setNearbyAttractions] = React.useState([]);
   const [toggles, setToggles] = React.useState({
     lodging: false,
     gas_station: false,
     restaurant: false
   });
-  const [nearbyAttractions, setNearbyAttractions] = React.useState([]);
-  const [notifications, setNotifications] = React.useState([]);
+
+  // --- 8. Refs (Non-Rendering Storage) ---
+  const mapRef = useRef(null);
+  const addMapRef = useRef(null);
+  const tempMarkerRef = useRef(null);
+  const markerRegistryRef = useRef({});
+  const routingControlRef = useRef(null);
+  const currentRouteIdsRef = useRef("");
+  const autocompleteRef = useRef(null);
+  const nearbyMarkersRef = React.useRef([]);
+
+  // --- 9. Optimized Values (Debounced) ---
+  const debouncedSearch = useDebounce(searchTerm, 300);
+  const debouncedPlannerSearch = useDebounce(plannerSearch, 300);
 
 
-
-
-  // 1. Unified Initialization & Location Logic
+  // --- 1. CORE INITIALIZATION & ICON OBSERVER ---
   useEffect(() => {
-    // This part was missing in your Block 2 - without it, data never loads!
     const watchId = getUserLocation();
     fetchPlaces();
     fetchInteractions();
     logVisit('Main Page');
 
-    return () => {
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-    };
-  }, []);
+    // Initial Lucide icon render
+    if (window.lucide) window.lucide.createIcons();
 
-  // 2. Mobile-Optimized Icon Management (Safe MutationObserver)
-  useEffect(() => {
-    // Target the body or a specific container to ensure it exists
+    // Mobile-Optimized Icon Management (MutationObserver)
     const targetNode = document.body;
-    if (!window.lucide) return;
-
-    // Initial render call
-    window.lucide.createIcons();
-
-    // Use a small debounce to prevent "Layout Thrashing" on mobile
     let iconTimer;
+
     const observer = new MutationObserver((mutations) => {
       const hasNewIcons = mutations.some(mutation =>
         Array.from(mutation.addedNodes).some(node =>
@@ -513,22 +758,197 @@ function App() {
       if (hasNewIcons) {
         clearTimeout(iconTimer);
         iconTimer = setTimeout(() => {
-          // Temporarily disconnect to modify DOM safely
           observer.disconnect();
-          window.lucide.createIcons();
-          // Reconnect after Lucide is finished
+          if (window.lucide) window.lucide.createIcons();
           observer.observe(targetNode, { childList: true, subtree: true });
-        }, 50); // 50ms buffer allows mobile layout to stabilize
+        }, 50);
       }
     });
 
     observer.observe(targetNode, { childList: true, subtree: true });
 
     return () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
       observer.disconnect();
       clearTimeout(iconTimer);
     };
   }, []);
+
+  // --- 2. UI, SEO & DEEP LINKING ---
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [selectedCategory, debouncedSearch, statusFilter]);
+
+  // Re-render icons specifically for notifications
+  useEffect(() => {
+    if (window.lucide) window.lucide.createIcons();
+  }, [notifications]);
+
+  // Handle Deep Linking (Opening specific places via URL)
+  useEffect(() => {
+    if (places.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const placeFromUrl = urlParams.get('place');
+
+      if (placeFromUrl) {
+        const target = places.find(p => p.place_name === placeFromUrl);
+        if (target) {
+          setViewingArticle(target);
+          setisArticleOpen(true);
+        }
+      }
+    }
+  }, [places]);
+
+  // Update Metadata & SEO based on current view
+  useEffect(() => {
+    if (ViewingArticle) {
+      updateSEO(
+        ViewingArticle?.place_name,
+        ViewingArticle.description || `Explore ${ViewingArticle?.place_name} in ${ViewingArticle.district}, Sri Lanka.`,
+        ViewingArticle.image_url
+      );
+    } else {
+      updateSEO(
+        "My Journal",
+        "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations."
+      );
+    }
+  }, [ViewingArticle]);
+
+// --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
+
+const handleLocationSelect = useCallback((lat, lng, dist) => {
+  setFormData(prev => ({
+    ...prev,
+    latitude: lat,
+    longitude: lng,
+    district: dist || prev.district
+  }));
+}, []);
+
+/**
+ * RENDER LOGIC:
+ * We use 'MapWidget' as the variable name to avoid conflict with the 
+ * browser's 'window.Map' constructor.
+ */
+const MemoizedAddMap = useMemo(() => (
+  <Suspense fallback={<div className="w-full h-full bg-slate-200 animate-pulse" />}>
+    <MapSelectionComponent 
+      onMapReady={(map) => setAddMapInstance(map)} 
+      onLocationSelect={handleLocationSelect}
+    />
+  </Suspense>
+), [handleLocationSelect]);
+
+/**
+ * AUTOCOMPLETE LOGIC:
+ * Syncs Google Search results with the Leaflet map instance and places a visual marker.
+ */
+useEffect(() => {
+  if (isAddOpen) {
+    let autocompleteInstance = null;
+
+    const initAutocomplete = async () => {
+      if (!window.google || !window.google.maps) return;
+
+      try {
+        const { Autocomplete } = await google.maps.importLibrary("places");
+        const input = document.getElementById('location-search');
+        if (!input) return;
+
+        autocompleteInstance = new Autocomplete(input, {
+          fields: ["address_components", "geometry", "name", "url"],
+          componentRestrictions: { country: "lk" }
+        });
+
+        autocompleteInstance.addListener("place_changed", () => {
+          const place = autocompleteInstance.getPlace();
+          if (!place.geometry || !place.geometry.location) return;
+
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+          
+          const components = place.address_components || [];
+          const locality = components.find(c => c.types.includes("administrative_area_level_2"))?.long_name || 
+                           components.find(c => c.types.includes("locality"))?.long_name || "";
+
+          // 1. Update form data state
+          setFormData(prev => ({
+            ...prev,
+            place_name: place.name,
+            latitude: parseFloat(lat.toFixed(6)),
+            longitude: parseFloat(lng.toFixed(6)),
+            district: locality,
+            map_url: place.url
+          }));
+
+          // 2. Map Visual Sync: Fly to location AND drop the yellow marker
+          if (addMapInstance) {
+            addMapInstance.flyTo([lat, lng], 16, { 
+              animate: true, 
+              duration: 1.5 
+            });
+
+            // Clear existing temporary markers from previous searches
+            if (tempMarkerRef.current) {
+              addMapInstance.removeLayer(tempMarkerRef.current);
+            }
+
+            // Create the signature yellow circle marker at the search result
+            tempMarkerRef.current = L.circleMarker([lat, lng], {
+              radius: 8,
+              fillColor: '#facc15', // Yellow-400
+              color: '#ca8a04',     // Yellow-600 border
+              weight: 3,
+              fillOpacity: 1
+            }).addTo(addMapInstance);
+          }
+        });
+      } catch (err) {
+        console.error("Autocomplete init error:", err);
+      }
+    };
+
+    const retryInterval = setInterval(() => {
+      if (window.google?.maps) {
+        initAutocomplete();
+        clearInterval(retryInterval);
+      }
+    }, 500);
+
+    return () => {
+      clearInterval(retryInterval);
+      if (window.google?.maps?.event && autocompleteInstance) {
+        google.maps.event.clearInstanceListeners(autocompleteInstance);
+      }
+    };
+  }
+}, [isAddOpen, addMapInstance]);
+
+  // --- 4. PLANNER & WEATHER ENGINE LOGIC ---
+  useEffect(() => {
+    if (isPlannerOpen && places.length > 0) {
+      logVisit('Plan Function');
+
+      const filteredForWeather = places.filter(place => {
+        const search = (debouncedPlannerSearch || "").toLowerCase();
+        if (!search) return place.status === 'done' || place.status === 'pending';
+
+        const name = (place.place_name || "").toLowerCase();
+        const district = (place.district || "").toLowerCase();
+        const cat = (place.category || "").toLowerCase();
+
+        return (place.status === 'done' || place.status === 'pending') &&
+          (name.includes(search) || district.includes(search) || cat.includes(search));
+      });
+
+      if (filteredForWeather.length > 0) {
+        fetchRouteWeather(filteredForWeather);
+      }
+    }
+  }, [isPlannerOpen, debouncedPlannerSearch, places]);
 
   // 1. Define the filtering logic first
   const filteredPlaces = useMemo(() => {
@@ -549,208 +969,15 @@ function App() {
     return filteredPlaces.slice(0, visibleCount);
   }, [filteredPlaces, visibleCount]);
 
-  // --- 3. Scroll Handler ---
-  const handleScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    // Load more when user is 150px from the bottom
-    if (scrollHeight - scrollTop <= clientHeight + 150) {
-      if (visibleCount < filteredPlaces.length) {
-        setVisibleCount(prev => prev + 20);
-      }
-    }
-  };
-
-  // Reset scroll count when filters change
-  React.useEffect(() => {
-    setVisibleCount(20);
-  }, [selectedCategory, debouncedSearch, statusFilter]);
-
-
-  const showToast = React.useCallback((message, type = 'info') => {
+  const showToast = useCallback((message, type = 'info') => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, message, type }]);
-
-    // Auto-remove after 4 seconds
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 4000);
   }, []);
 
-  // This ensures Lucide icons render inside the toasts when they appear
-  React.useEffect(() => {
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
-  }, [notifications]);
-
-  // --- 3. Add Location Verification Map ---
-  useEffect(() => {
-    if (!isAddOpen) {
-      if (addMapRef.current) {
-        addMapRef.current.remove();
-        addMapRef.current = null;
-      }
-      return;
-    }
-
-
-
-    const timer = setTimeout(() => {
-      const container = document.getElementById('add-verification-map');
-      if (!container || addMapRef.current) return;
-
-      addMapRef.current = L.map('add-verification-map', {
-        zoomControl: false,
-        attributionControl: false
-      }).setView([7.87, 80.77], 7);
-
-
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(addMapRef.current);
-
-      // Draw existing places as small gray dots with tooltips
-      places.forEach(p => {
-        if (p.latitude && p.longitude) {
-          L.circleMarker([p.latitude, p.longitude], {
-            radius: 5, fillColor: '#94a3b8', color: '#fff', weight: 1, fillOpacity: 0.8
-          }).bindTooltip(p.place_name, { direction: 'top', textOnly: true }).addTo(addMapRef.current);
-        }
-      });
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      if (addMapRef.current) {
-        addMapRef.current.remove();
-        addMapRef.current = null;
-      }
-    };
-  }, [isAddOpen, places]);
-
-  // --- 4. Adventure Engine / Planner Map ---
-  useEffect(() => {
-    if (!isPlannerOpen) {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-        markerRegistryRef.current = {};
-      }
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      const mapContainer = document.getElementById('planner-map');
-      if (!mapContainer) return;
-
-      // Initialize Map instance
-      if (!mapRef.current) {
-        // Prioritize userCoords for map centering, fallback to DEFAULT
-        mapRef.current = L.map('planner-map', {
-          zoomControl: false,
-          attributionControl: true
-        }).setView([userCoords?.lat || DEFAULT_LOCATION.lat, userCoords?.lng || DEFAULT_LOCATION.lng], 10);
-
-        // Add tile layer
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(mapRef.current);
-      }
-
-      // Handle Markers
-      places.forEach(place => {
-        const isHovered = hoveredPlaceId === place.id;
-        const isSelected = selectedRoute.find(p => p.id === place.id);
-        const markerColor = isHovered ? "#3b82f6" : isSelected ? "#ef4444" : place.status === 'done' ? "#10b981" : "#f97316";
-
-        if (!markerRegistryRef.current[place.id]) {
-          const marker = L.circleMarker([place.latitude, place.longitude], {
-            radius: 6,
-            fillColor: markerColor,
-            color: "#fff",
-            weight: 2,
-            fillOpacity: 1
-          }).addTo(mapRef.current);
-
-          marker.bindTooltip(place.place_name, { direction: 'top', offset: [0, -5] });
-
-          // --- UPDATED CLICK HANDLER ---
-          marker.on('click', () => {
-            setHoveredPlaceId(place.id);
-            const lat = parseFloat(place.latitude);
-            const lng = parseFloat(place.longitude);
-            fetchAttractions(lat, lng);
-          });
-          markerRegistryRef.current[place.id] = marker;
-        } else {
-          const marker = markerRegistryRef.current[place.id];
-          marker.setStyle({ fillColor: markerColor, radius: isHovered ? 9 : 6 });
-          if (isHovered || isSelected) marker.bringToFront();
-        }
-      });
-
-      // Handle Routing
-      const routeSignature = selectedRoute.map(p => p.id).join(',');
-      if (currentRouteIdsRef.current !== routeSignature) {
-        currentRouteIdsRef.current = routeSignature;
-
-        if (selectedRoute.length > 0 && userCoords) {
-          // FIXED: Start route from userCoords
-          const waypoints = [
-            L.latLng(userCoords.lat, userCoords.lng),
-            ...selectedRoute.map(p => L.latLng(p.latitude, p.longitude))
-          ];
-
-          if (routingControlRef.current) {
-            routingControlRef.current.setWaypoints(waypoints);
-          } else {
-            routingControlRef.current = L.Routing.control({
-              waypoints,
-              router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
-              lineOptions: { styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }] },
-              createMarker: () => null,
-              addWaypoints: false,
-              show: false,
-              fitSelectedRoutes: true
-            }).on('routesfound', (e) => {
-              setRouteDistance((e.routes[0].summary.totalDistance / 1000).toFixed(1));
-            }).addTo(mapRef.current);
-          }
-        } else if (routingControlRef.current) {
-          mapRef.current.removeControl(routingControlRef.current);
-          routingControlRef.current = null;
-          setRouteDistance(0);
-        }
-      }
-
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [isPlannerOpen, selectedRoute, hoveredPlaceId, places, userCoords]);
-
-  React.useEffect(() => {
-    if (!mapRef.current) return;
-
-    const onMapClick = (e) => {
-      const { lat, lng } = e.latlng;
-      // Call your search logic using the clicked coordinates
-      fetchAttractions(lat, lng);
-
-      // Optional: Add a temporary marker to show where you clicked
-      if (tempMarkerRef.current) mapRef.current.removeLayer(tempMarkerRef.current);
-      tempMarkerRef.current = L.circleMarker([lat, lng], {
-        radius: 8,
-        fillColor: "#3b82f6",
-        color: "#fff",
-        weight: 2,
-        fillOpacity: 0.5
-      }).addTo(mapRef.current);
-    };
-
-    mapRef.current.on('click', onMapClick);
-    return () => {
-      if (mapRef.current) mapRef.current.off('click', onMapClick);
-    };
-  }, [mapRef.current]);
-
-
-  const placesWithDistance = React.useMemo(() => {
+  const placesWithDistance = useMemo(() => {
     if (!userCoords) return places;
     return places.map(p => ({
       ...p,
@@ -759,7 +986,6 @@ function App() {
   }, [places, userCoords]);
 
   const fetchPlaces = async () => {
-    // Remove the .eq('status', 'done') filter to get everything
     const { data } = await supabaseClient
       .from('travel_bucket_list')
       .select('*')
@@ -767,15 +993,19 @@ function App() {
     setPlaces(data || []);
   };
 
+  /**
+   * TOGGLE NEARBY PLACES (Food, Gas, Hotels)
+   * Fixed to use mapRef instead of mapInstance
+   */
   const toggleNearby = async (type) => {
     const isTurningOn = !toggles[type];
     setToggles(prev => ({ ...prev, [type]: isTurningOn }));
 
-    // If turning OFF: Filter and remove markers of this specific type
+    // 1. Clear markers if turning off
     if (!isTurningOn) {
       nearbyMarkersRef.current = nearbyMarkersRef.current.filter(item => {
         if (item.type === type) {
-          mapRef.current.removeLayer(item.marker);
+          if (mapRef.current) mapRef.current.removeLayer(item.marker);
           return false;
         }
         return true;
@@ -783,114 +1013,75 @@ function App() {
       return;
     }
 
-    // If turning ON: Check for route and fetch
-    if (!routingControlRef.current?._selectedRoute) return showToast("Please plan a route first!");
+    // 2. Check the bridge state
+    if (!routeData || !routeData.coordinates) {
+      showToast("Please plan a route first!", "error");
+      setToggles(prev => ({ ...prev, [type]: false }));
+      return;
+    }
 
     try {
       await google.maps.importLibrary("places");
       const service = new google.maps.places.PlacesService(document.createElement('div'));
-      const coords = routingControlRef.current._selectedRoute.coordinates;
-
-      // Sample every 15th coordinate to stay within Google API limits
+      
+      const coords = routeData.coordinates;
+      // Sample 15 points along the path to find locations along the whole road
       const sampleRate = Math.max(1, Math.floor(coords.length / 15));
       const pointsToSearch = coords.filter((_, index) => index % sampleRate === 0);
 
-      const colors = {
-        lodging: '#3b82f6',     // Blue
-        gas_station: '#eab308', // Yellow
-        restaurant: '#a855f7'   // Purple
-      };
+      const colors = { lodging: '#3b82f6', gas_station: '#eab308', restaurant: '#a855f7' };
 
       pointsToSearch.forEach((point) => {
         service.nearbySearch({
           location: new google.maps.LatLng(point.lat, point.lng),
-          radius: '5000',
+          radius: '5000', // 5km search radius
           type: type
         }, (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK) {
+          if (status === google.maps.places.PlacesServiceStatus.OK && mapRef.current) {
             results.forEach(place => {
-              // QUALITY FILTER LOGIC
-              // Define thresholds: 4.0+ rating and at least 20 reviews
-              const isHighQuality = place.rating >= 4.0 && (place.user_ratings_total || 0) >= 20;
-              const needsFiltering = type === 'restaurant' || type === 'lodging';
+              const isHighQuality = place.rating >= 4.0 && (place.user_ratings_total || 0) >= 15;
+              const isFuel = type === 'gas_station';
 
-              // Only proceed if it's a "utility" (gas) OR if it meets the quality bar
-              if (!needsFiltering || isHighQuality) {
+              if (isFuel || isHighQuality) {
                 const dot = L.circleMarker([place.geometry.location.lat(), place.geometry.location.lng()], {
-                  radius: 6,
+                  radius: 7,
                   fillColor: colors[type],
                   color: "#fff",
                   weight: 2,
-                  opacity: 1,
                   fillOpacity: 1
-                }).addTo(mapRef.current)
-                  .bindPopup(`
-                                <div class="p-1">
-                                    <b class="text-slate-900">${place.name}</b><br>
-                                    <span class="text-xs text-slate-500">${place.vicinity}</span>
-                                    ${place.rating ? `
-                                        <div class="flex items-center mt-1 gap-1">
-                                            <span class="text-amber-500 text-xs font-bold">★ ${place.rating}</span>
-                                            <span class="text-[10px] text-slate-400">(${place.user_ratings_total} reviews)</span>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                              `);
-
+                }).addTo(mapRef.current) // Uses the correct Map Reference
+                  .bindPopup(`<b>${place.name}</b><br/>Rating: ⭐${place.rating || 'N/A'}`);
+                
                 nearbyMarkersRef.current.push({ type, marker: dot });
               }
             });
           }
         });
       });
-    } catch (e) { }
+    } catch (e) {
+      console.error("Nearby Search Error:", e);
+    }
   };
 
   const handleReset = () => {
-
     setPlannerSearch('');
     setSelectedRoute([]);
     setRouteDistance(0);
     setNearbyAttractions([]);
-
     nearbyMarkersRef.current.forEach(m => mapRef.current.removeLayer(m.marker));
     nearbyMarkersRef.current = [];
-
     setToggles({ lodging: false, gas_station: false, restaurant: false });
-
   };
 
-  // DEEP LINKING: 
-  React.useEffect(() => {
-    if (places.length > 0) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const placeFromUrl = urlParams.get('place');
-
-      if (placeFromUrl) {
-        const target = places.find(p => p.place_name === placeFromUrl);
-        if (target) {
-          setViewingArticle(target);
-          setisArticleOpen(true);
-        }
+  // --- Scroll Handler Fix ---
+  const handleScroll = useCallback((e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 150) {
+      if (visibleCount < filteredPlaces.length) {
+        setVisibleCount(prev => prev + 20);
       }
     }
-  }, [places]);
-
-
-  React.useEffect(() => {
-    if (ViewingArticle) {
-      updateSEO(
-        ViewingArticle?.place_name,
-        ViewingArticle.description || `Explore ${ViewingArticle?.place_name} in ${ViewingArticle.district}, Sri Lanka.`,
-        ViewingArticle.image_url // Passing the article image
-      );
-    } else {
-      updateSEO(
-        "My Journal",
-        "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations."
-      );
-    }
-  }, [ViewingArticle]);
+  }, [visibleCount, filteredPlaces.length]);
 
 
   // 2. Weather Fetching Logic (Optimized for Speed)
@@ -1328,173 +1519,61 @@ function App() {
 
 
 
-  useEffect(() => {
-    if (isAddOpen) {
 
-      logVisit('Add Function');
-
-      const initAutocomplete = async () => {
-        try {
-          const { Autocomplete } = await google.maps.importLibrary("places");
-          const input = document.getElementById('location-search');
-          if (!input) return;
-
-          autocompleteRef.current = new Autocomplete(input, {
-            fields: ["address_components", "geometry", "name", "url"],
-            componentRestrictions: { country: "lk" }
-          });
-
-          autocompleteRef.current.addListener("place_changed", () => {
-            const place = autocompleteRef.current.getPlace();
-            if (!place.geometry) return;
-
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-
-            // Smart mapping: Try District first, then fallback to City/Locality
-            const addressComponents = place.address_components || [];
-            const districtName = addressComponents.find(c =>
-              c.types.includes("administrative_area_level_2")
-            )?.long_name || addressComponents.find(c =>
-              c.types.includes("locality") || c.types.includes("sublocality")
-            )?.long_name || '';
-
-            setFormData(prev => ({
-              ...prev,
-              place_name: place.name,
-              latitude: lat,
-              longitude: lng,
-              map_url: place.url,
-              district: districtName // Saved to the correct DB column
-            }));
-
-            if (addMapRef.current) {
-              addMapRef.current.setView([lat, lng], 14);
-              if (tempMarkerRef.current) addMapRef.current.removeLayer(tempMarkerRef.current);
-              tempMarkerRef.current = L.circleMarker([lat, lng], {
-                radius: 8, fillColor: '#facc15', color: '#ca8a04', weight: 3, fillOpacity: 1
-              }).addTo(addMapRef.current);
-            }
-          });
-        } catch (err) { }
-      };
-      const timer = setTimeout(initAutocomplete, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isAddOpen]);
 
   const handleAddPlace = async (e) => {
     e.preventDefault();
 
-    // 1. Validation: Ensure a location was selected via Google Autocomplete
-    if (!formData.latitude || !formData.longitude) {
-      showToast("Please select a location from the search suggestions dropdown.");
-      return;
-    }
-
-    // 2. Normalization for Duplicate Check
-    const normalizedName = formData.place_name.trim().toLowerCase();
-    const latFixed = parseFloat(formData.latitude).toFixed(4);
-    const lngFixed = parseFloat(formData.longitude).toFixed(4);
-    const formUrl = formData.map_url || "";
-
-    // 3. Duplicate Detection Logic
-    const isDuplicate = places.some(p => {
-      // Check for Name match
-      const nameMatch = p.place_name && p.place_name.toLowerCase() === normalizedName;
-
-      // Check for Coordinate match (~11m precision)
-      const coordMatch = p.latitude && p.longitude &&
-        parseFloat(p.latitude).toFixed(4) === latFixed &&
-        parseFloat(p.longitude).toFixed(4) === lngFixed;
-
-      // Check for Google Maps URL match
-      const urlMatch = formUrl && p.google_maps_url && p.google_maps_url === formUrl;
-
-      return nameMatch || coordMatch || urlMatch;
-    });
+    // 1. DUPLICATE VALIDATION (Check against existing live list)
+    const isDuplicate = places.some(place =>
+      place.place_name.toLowerCase() === formData.place_name.trim().toLowerCase() ||
+      (place.latitude === parseFloat(formData.latitude) &&
+        place.longitude === parseFloat(formData.longitude))
+    );
 
     if (isDuplicate) {
-      showToast("⚠️ Verification Failed: This location already exists in your Journal!");
+      addNotification("This spot is already in the Journal!", "error");
       return;
     }
 
-    // 4. Submit to Database
+    // 2. SUBMIT TO PENDING_APPROVALS
     try {
-      const { error } = await supabaseClient
-        .from('pending_approvals')
+      const { error } = await supabase
+        .from('pending_approvals') // Updated table name
         .insert([{
-          place_name: formData.place_name,
-          district: formData.district, // Column verified in schema
-          latitude: formData.latitude,
-          longitude: formData.longitude,
-          map_url: formData.map_url,
-          image_url: formData.image_url,
+          place_name: formData.place_name.trim(),
           category: formData.category,
-          status: 'pending' // Explicitly set status for approval flow
+          latitude: parseFloat(formData.latitude),
+          longitude: parseFloat(formData.longitude),
+          district: formData.district,
+          map_url: formData.map_url,
+          status: 'pending', // Explicitly set status
+          submitted_at: new Date().toISOString()
         }]);
 
       if (error) throw error;
 
-      // 5. Success Handling
-      showToast("Success! Your suggestion has been sent for approval.");
+      // 3. SUCCESS FEEDBACK
+      addNotification("Success! Spot submitted for review.", "success");
       setisAddOpen(false);
 
-      // Reset state (No 'locality' key included)
+      // Reset form for next time
       setFormData({
-        place_name: '',
-        district: '',
-        latitude: '',
-        longitude: '',
-        map_url: '',
-        image_url: 'https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png',
-        status: 'pending',
-        category: 'Waterfall'
+        place_name: "",
+        category: "Location",
+        latitude: null,
+        longitude: null,
+        district: "",
+        map_url: ""
       });
 
-      // Clear the map marker
-      if (tempMarkerRef.current && addMapRef.current) {
-        addMapRef.current.removeLayer(tempMarkerRef.current);
-        tempMarkerRef.current = null;
-      }
-
     } catch (err) {
-      showToast("Error sending request: " + err.message);
+      console.error("Submission error:", err);
+      addNotification("Failed to submit: " + err.message, "error");
     }
   };
 
-  React.useEffect(() => {
-    // Only run if planner is open and we have data
-    if (isPlannerOpen && places.length > 0) {
 
-      logVisit('Plan Function');
-
-      const filteredForWeather = places.filter(place => {
-
-        const search = (debouncedPlannerSearch || "").toLowerCase();
-
-        if (!search) return place.status === 'done' || place.status === 'pending';
-
-        const name = (place.place_name || "").toLowerCase();
-        const district = (place.district || "").toLowerCase();
-        const locality = (place.locality || "").toLowerCase();
-        const cat = (place.category || "").toLowerCase();
-
-        const matchesSearch = name.includes(search) ||
-          district.includes(search) ||
-          locality.includes(search) ||
-          cat.includes(search);
-
-        return (place.status === 'done' || place.status === 'pending') && matchesSearch;
-      });
-
-
-      if (filteredForWeather.length > 0) {
-        fetchRouteWeather(filteredForWeather);
-      }
-    }
-
-  }, [isPlannerOpen, debouncedPlannerSearch, places]);
 
 
 
@@ -1620,7 +1699,21 @@ function App() {
 
   }, [placesWithDistance, statusFilter, filterTag, debouncedSearch, sortBy, userCoords]);
 
-
+// --- Advertisement Loader ---
+  useEffect(() => {
+    // Check if the script is already present to avoid multiple loads
+    const scriptId = 'adsterra-invoke-script';
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.async = true;
+      script.dataset.cfasync = "false";
+      script.src = "https://pl29174284.profitablecpmratenetwork.com/023accb7675231a6241cd0771cc13617/invoke.js";
+      
+      // Append to head or body
+      document.body.appendChild(script);
+    }
+  }, []);
 
   const PrivacyModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
@@ -2181,7 +2274,7 @@ function App() {
         </div>
       )}
 
-      {/* Route Planner Modal */}
+      {/* --- ROUTE PLANNER MODAL --- */}
       {isPlannerOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 md:p-4">
           {/* Backdrop */}
@@ -2191,12 +2284,31 @@ function App() {
           ></div>
 
           {/* Modal Container */}
-          <div className="relative bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col md:flex-row">
+          <div className="relative bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
 
-            {/* Left Side: Map Widget - Reduced width to 60% to give selection panel more breathing room */}
-            <div className="h-[30vh] md:h-full md:w-[60%] bg-slate-100 relative z-0 shrink-0" id="planner-map"></div>
+            {/* LEFT SIDE: MAP ENGINE */}
+            <div className="h-[40vh] md:h-full md:w-[60%] bg-slate-100 relative z-0 shrink-0 overflow-hidden">
+              <MapComponent
+                places={places}
+                userCoords={userCoords}
+                selectedRoute={selectedRoute}
+                hoveredPlaceId={hoveredPlaceId}
+                setHoveredPlaceId={setHoveredPlaceId}
+                fetchAttractions={fetchAttractions}
+                setRouteDistance={setRouteDistance}
+                setRouteData={setRouteData}
+                toggles={toggles}
+              />
 
-            {/* Right Side: Selection Panel - Increased width and added containment */}
+              {/* Floating Map Label */}
+              <div className="absolute top-4 left-4 z-[1000] pointer-events-none">
+                <div className="bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white shadow-sm">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-900">Interactive Route Engine</p>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT SIDE: SELECTION PANEL */}
             <div className="flex-1 flex flex-col min-w-0 bg-white z-10 border-t md:border-t-0 md:border-l border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] md:shadow-none rounded-t-[2rem] md:rounded-t-none -mt-6 md:mt-0 overflow-hidden">
 
               {/* 1. Header Section */}
@@ -2206,9 +2318,9 @@ function App() {
                     <h2 className="text-lg font-black uppercase tracking-tighter italic text-slate-900 leading-none truncate">Route Planner</h2>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-lg">
-                        {selectedRoute.length} Stops
+                        {selectedRoute.length} Stops Selected
                       </span>
-                      {selectedRoute.length > 0 && routeDistance > 0 && (
+                      {selectedRoute.length > 0 && parseFloat(routeDistance) > 0 && (
                         <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 flex items-center gap-1">
                           <Navigation className="w-2.5 h-2.5" />
                           {routeDistance} KM
@@ -2218,11 +2330,11 @@ function App() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {selectedRoute.length > 0 && (
-                      <button onClick={handleReset} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-500 rounded-full active:rotate-180 transition-transform duration-500">
+                      <button onClick={handleReset} className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-500 rounded-full active:rotate-180 transition-transform duration-500" title="Reset Route">
                         <RefreshCw className="w-4 h-4" />
                       </button>
                     )}
-                    <button onClick={() => setIsPlannerOpen(false)} className="w-8 h-8 bg-slate-900 text-white rounded-full flex items-center justify-center">
+                    <button onClick={() => setIsPlannerOpen(false)} className="w-8 h-8 bg-slate-900 text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-colors">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
@@ -2232,10 +2344,11 @@ function App() {
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Find a place..."
+                    placeholder="Filter by name or category..."
                     value={plannerSearch}
                     onChange={(e) => setPlannerSearch(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl py-2.5 pl-11 pr-4 text-[11px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all" />
+                    className="w-full bg-slate-50 border border-slate-100 rounded-xl py-2.5 pl-11 pr-4 text-[11px] font-bold uppercase tracking-widest focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all"
+                  />
                 </div>
               </div>
 
@@ -2243,40 +2356,41 @@ function App() {
               <div className="flex gap-2 p-3 bg-white border-b border-slate-50 overflow-x-auto no-scrollbar shrink-0">
                 {[
                   { id: 'lodging', label: 'Hotels', icon: 'bed', color: 'bg-blue-500' },
-                  { id: 'gas_station', label: 'Fuel', icon: 'fuel', color: 'bg-yellow-500' },
-                  { id: 'restaurant', label: 'Food', icon: 'utensils', color: 'bg-purple-500' }
+                  { id: 'gas_station', label: 'Fuel Station', icon: 'fuel', color: 'bg-yellow-500' },
+                  { id: 'restaurant', label: 'Food & Dining', icon: 'utensils', color: 'bg-purple-500' }
                 ].map(type => (
                   <button
                     key={type.id}
                     onClick={() => toggleNearby(type.id)}
-                    className={`flex-1 min-w-[90px] py-2 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center justify-center gap-2 
-                                ${toggles[type.id] ? `${type.color} border-transparent text-white shadow-md` : 'bg-white border-slate-100 text-slate-400'}`}
+                    className={`flex-1 min-w-[110px] py-2 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center justify-center gap-2 
+                ${toggles[type.id] ? `${type.color} border-transparent text-white shadow-md` : 'bg-white border-slate-100 text-slate-400'}`}
                   >
-                    <RenderDynamicIcon iconName={type.icon} className="w-3 h-3" /> {type.label}
+                    {/* Note: Ensure RenderDynamicIcon is defined or use specific Lucide icons */}
+                    <MapPin className="w-3 h-3" /> {type.label}
                   </button>
                 ))}
               </div>
 
-              {/* 3. Main Scrollable List Area */}
+              {/* 3. Scrollable Content Area */}
               <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
-                {/* Nearby Attractions */}
+                {/* Nearby Suggestions Section */}
                 {nearbyAttractions.length > 0 && (
                   <div className="p-4 bg-indigo-50/30 border-b border-indigo-100/50">
                     <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Nearby Gems</h4>
+                      <h4 className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Discover Nearby</h4>
                       <button onClick={() => setNearbyAttractions([])} className="text-[8px] font-black text-rose-400 uppercase">Dismiss</button>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar scroll-smooth">
                       {nearbyAttractions.map((attr) => (
                         <div
                           key={attr.id}
-                          onClick={() => handleSelectSuggestion(attr)}
-                          className="min-w-[130px] bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 active:scale-95 transition-transform"
+                          onClick={() => typeof handleSelectSuggestion === 'function' && handleSelectSuggestion(attr)}
+                          className="min-w-[130px] bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 active:scale-95 transition-transform cursor-pointer"
                         >
-                          <img src={attr.image} className="h-16 w-full object-cover" />
+                          <img src={attr.image} className="h-16 w-full object-cover" alt={attr.name} />
                           <div className="p-2">
-                            <h5 className="text-[9px] font-black text-slate-800 line-clamp-1">{attr.name}</h5>
-                            <span className="text-[8px] font-bold text-amber-500">★ {attr.rating || 'N/A'}</span>
+                            <h5 className="text-[9px] font-black text-slate-800 line-clamp-1 uppercase tracking-tighter">{attr.name}</h5>
+                            <span className="text-[8px] font-bold text-amber-500 flex items-center gap-1">★ {attr.rating || 'N/A'}</span>
                           </div>
                         </div>
                       ))}
@@ -2284,37 +2398,37 @@ function App() {
                   </div>
                 )}
 
-                {/* Location Cards */}
+                {/* Location Cards List */}
                 <div className="p-4 space-y-2">
                   {(() => {
-                    let filtered = places.filter(place => {
-                      const search = (plannerSearch || "").toLowerCase();
-                      return (place.status === 'done' || place.status === 'pending') &&
-                        (place.place_name.toLowerCase().includes(search) || place.category.toLowerCase().includes(search));
-                    }).map(place => ({
-                      ...place,
-                      dist: userCoords ? calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude) : Infinity
-                    })).sort((a, b) => a.dist - b.dist);
+                    const search = (plannerSearch || "").toLowerCase();
+                    const filtered = places
+                      .filter(place =>
+                        (place.status === 'done' || place.status === 'pending') &&
+                        (place.place_name.toLowerCase().includes(search) || place.category.toLowerCase().includes(search))
+                      )
+                      .map(place => ({
+                        ...place,
+                        dist: userCoords ? calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude) : Infinity
+                      }))
+                      .sort((a, b) => a.dist - b.dist);
 
                     if (filtered.length === 0) return (
-                      <div className="text-center py-10 opacity-30 text-[10px] font-black uppercase tracking-widest">No Matches</div>
+                      <div className="text-center py-10 opacity-30 text-[10px] font-black uppercase tracking-widest">No matching locations</div>
                     );
 
                     return filtered.map(place => {
                       const isSelected = selectedRoute.find(p => p.id === place.id);
-                      const weather = weatherData[place.place_name];
+                      const weather = weatherData ? weatherData[place.place_name] : null;
                       return (
                         <div key={place.id} className={`flex items-center p-3 rounded-2xl border transition-all ${isSelected ? 'border-indigo-500 bg-indigo-50/30 ring-1 ring-indigo-500/20' : 'border-slate-100 bg-white'}`}>
-                          <div className="flex-1 min-w-0 pr-2" onClick={() => toggleRoutePlace(place)}>
+                          <div className="flex-1 min-w-0 pr-2 cursor-pointer" onClick={() => toggleRoutePlace(place)}>
                             <div className="flex items-center gap-2">
                               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${place.status === 'pending' ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                               <span className="text-[10px] font-black uppercase truncate text-slate-900">{place.place_name}</span>
                             </div>
-
                             <div className="flex flex-col gap-1.5 mt-2">
                               <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tight">{place.category} • {place.dist.toFixed(1)} km</span>
-
-                              {/* Two Weather Badges: Current and Next Day */}
                               {weather && (
                                 <div className="flex flex-wrap gap-1.5">
                                   <div className="flex items-center gap-1 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md">
@@ -2329,7 +2443,7 @@ function App() {
                               )}
                             </div>
                           </div>
-                          <button onClick={() => toggleRoutePlace(place)} className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          <button onClick={() => toggleRoutePlace(place)} className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>
                             {isSelected ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                           </button>
                         </div>
@@ -2342,95 +2456,141 @@ function App() {
               {/* 4. Footer Actions */}
               <div className="p-4 border-t border-slate-100 bg-white shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
                 <div className="flex gap-2">
+                  {selectedRoute.length >= 2 && (
+                    <button
+                      onClick={shareRoute}
+                      className="flex-1 py-3.5 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100"
+                    >
+                      <Share2 className="w-3.5 h-3.5" /> Share
+                    </button>
+                  )}
                   <button
-                    onClick={shareRoute}
-                    disabled={selectedRoute.length < 2}
-                    className={`flex-1 py-3.5 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all ${selectedRoute.length >= 2 ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'hidden'}`}
-                  >
-                    <i data-lucide="share-2" className="w-3.5 h-3.5"></i> Share
-                  </button>
-                  <button
-                    onClick={() => selectedRoute.length > 0 && showQRCode(selectedRoute, "My Route")}
+                    onClick={() => selectedRoute.length > 0 && typeof showQRCode === 'function' && showQRCode(selectedRoute, "My Travel Plan")}
                     disabled={selectedRoute.length === 0}
-                    className={`flex-[2] py-3.5 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-95 ${selectedRoute.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' : 'bg-slate-100 text-slate-300'}`}
+                    className={`flex-[2] py-3.5 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all active:scale-95 ${selectedRoute.length > 0 ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-slate-800' : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}
                   >
-                    <QrCode className="w-3.5 h-3.5" /> Generate Route QR
+                    <QrCode className="w-3.5 h-3.5" /> Generate QR
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </div> {/* End Panel */}
+          </div> {/* End Modal Container */}
+        </div> // End Fixed Inset
       )}
 
-      {/* Add Location to the Database */}
-
+      {/* --- SUGGEST A SPOT / ADD LOCATION MODAL --- */}
       {isAddOpen && (
         <div className="fixed inset-0 bg-white z-[3000] flex flex-col lg:flex-row animate-in fade-in duration-300">
-          {/* Map Side */}
-          <div className="w-full lg:w-1/2 h-[35vh] lg:h-full bg-slate-100 relative">
-            <div id="add-verification-map" className="w-full h-full"></div>
-            {/* The ID above must match the JS exactly */}
-            <div className="absolute top-6 left-6 z-[3001] bg-white p-4 rounded-2xl shadow-xl border border-slate-100">
-              <p className="text-[10px] font-black uppercase text-slate-400">Database Preview</p>
-              <p className="text-xs font-bold">Verifying location proximity...</p>
+
+          {/* LEFT SIDE: MAP SELECTION ENGINE */}
+          <div className="w-full lg:w-1/2 h-[25vh] lg:h-full bg-slate-100 relative">
+
+            {/* The map will now auto-center on formData.latitude/longitude changes */}
+            {MemoizedAddMap}
+
+            {/* Ultra-Compact Status Overlay */}
+            <div className="absolute top-3 left-3 z-[1001] bg-white/95 backdrop-blur-md p-3 rounded-lg shadow-xl border border-slate-200 pointer-events-none min-w-[140px]">
+              <p className="text-[8px] font-black uppercase text-slate-400 mb-1 tracking-tighter">Live Verification</p>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${formData.latitude ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                <p className="text-[10px] font-black text-slate-900 tabular-nums">
+                  {formData.latitude ? `${formData.latitude.toFixed(4)}, ${formData.longitude.toFixed(4)}` : "SELECTING POINT..."}
+                </p>
+              </div>
+              {formData.district && (
+                <div className="flex items-center gap-1 mt-1">
+                  <MapPin className="w-2 h-2 text-indigo-500" />
+                  <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-tighter">
+                    {formData.district}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Form Side */}
-          <div className="w-full lg:w-1/2 p-8 overflow-y-auto">
-            <div className="flex justify-between items-center mb-8">
+          {/* RIGHT SIDE: FORM DATA */}
+          <div className="w-full lg:w-1/2 p-5 lg:p-8 overflow-y-auto custom-scrollbar flex flex-col">
+            <div className="flex justify-between items-center mb-6">
               <div>
-                <h2 className="text-2xl font-black uppercase tracking-tighter">Suggest a Spot</h2>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Staging for Admin Review</p>
+                <h2 className="text-xl font-black uppercase tracking-tighter italic">Suggest Spot</h2>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                  Auto-Sync with Google Places & Map
+                </p>
               </div>
-              <button onClick={() => setisAddOpen(false)} className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center hover:bg-slate-200">
-                <X className="w-5 h-5" />
+              <button
+                onClick={() => setisAddOpen(false)}
+                className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors border border-slate-100"
+              >
+                <X className="w-4 h-4 text-slate-900" />
               </button>
             </div>
 
-            <form onSubmit={handleAddPlace} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Location Search</label>
+            <form onSubmit={handleAddPlace} className="space-y-4">
+
+              {/* 1. Location Search with Live Duplicate Alert */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Search Spot Name</label>
+                  {places.some(p => p.place_name.toLowerCase() === formData.place_name?.trim().toLowerCase()) && (
+                    <span className="text-[8px] font-black text-red-500 uppercase animate-bounce">Already in Database</span>
+                  )}
+                </div>
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     id="location-search"
                     type="text"
                     required
-                    placeholder="Search Google Maps..."
-                    onKeyDown={(e) => {
-                      // Prevents the form from submitting when you press Enter to select a map suggestion
-                      if (e.key === 'Enter') e.preventDefault();
-                    }}
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-medium"
+                    autoComplete="off"
+                    placeholder="Search (e.g. Laxapana Falls)..."
+                    value={formData.place_name || ""}
+                    onChange={(e) => setFormData({ ...formData, place_name: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl border bg-slate-50 outline-none transition-all font-bold text-sm
+                ${places.some(p => p.place_name.toLowerCase() === formData.place_name?.trim().toLowerCase())
+                        ? 'border-red-200 ring-2 ring-red-50'
+                        : 'border-slate-200 focus:bg-white focus:border-indigo-500'}`}
                   />
                 </div>
-                <p className="text-[9px] text-slate-400 italic ml-1">Coordinates and District are fetched automatically upon selection.</p>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Category</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 outline-none font-medium appearance-none focus:ring-4 focus:ring-indigo-500/10"
+              {/* 2. Category Selection */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Category</label>
+                <div className="relative">
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-bold text-[11px] uppercase tracking-wider appearance-none focus:border-indigo-500 transition-all cursor-pointer"
+                  >
+                    {["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Archaeology", "Reservoir", "Location"].map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* 3. Submission Action - Routes to pending_approvals */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={!formData.latitude || !formData.place_name || places.some(p => p.place_name.toLowerCase() === formData.place_name?.trim().toLowerCase())}
+                  className={`w-full py-3.5 rounded-xl font-black uppercase text-[10px] tracking-[0.15em] shadow-lg transition-all active:scale-[0.97] flex items-center justify-center gap-2
+              ${formData.latitude && formData.place_name && !places.some(p => p.place_name.toLowerCase() === formData.place_name?.trim().toLowerCase())
+                      ? 'bg-slate-900 text-white shadow-slate-900/20 hover:bg-indigo-600'
+                      : 'bg-slate-100 text-slate-300 cursor-not-allowed'}`}
                 >
-                  {["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"].map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                  <Plus className="w-3.5 h-3.5" />
+                  Submit for Review
+                </button>
+                <p className="text-[8px] text-center text-slate-400 font-bold mt-4 uppercase tracking-tighter opacity-60">
+                  * Coordinates and District are captured upon Google Selection
+                </p>
               </div>
-
-              <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-slate-900/20 hover:bg-indigo-600 transition-all active:scale-[0.98]">
-                Submit Suggestion
-              </button>
             </form>
           </div>
-
         </div>
-
-
       )}
 
       {activeId && (
