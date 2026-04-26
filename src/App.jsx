@@ -478,7 +478,8 @@ const MapComponent = ({
   setHoveredPlaceId,
   fetchAttractions,
   setRouteDistance,
-  setRouteData // Ensure this prop is passed from App.jsx to store path coordinates
+  setRouteData,
+  mapInstanceRef
 }) => {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -500,12 +501,16 @@ const MapComponent = ({
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
       }).addTo(mapInstance.current);
+
+
+      if (mapInstanceRef) mapInstanceRef.current = mapInstance.current;
     }
 
     return () => {
       if (mapInstance.current) {
         mapInstance.current.remove();
         mapInstance.current = null;
+        if (mapInstanceRef) mapInstanceRef.current = null; // Clean up
         markerRegistryRef.current = {};
         currentRouteIdsRef.current = "";
       }
@@ -575,14 +580,14 @@ const MapComponent = ({
   }, [places, selectedRoute, hoveredPlaceId, setHoveredPlaceId, fetchAttractions]);
 
   // --- 4. Handle Routing & Legend Suppression (Hardened) ---
-  
+
   useEffect(() => {
     // Basic safety check: ensure the map exists
     if (!mapInstance.current) return;
 
     // Create a signature to check if the route has actually changed
     const routeSignature = selectedRoute.map(p => p.id).join(',');
-    
+
     if (currentRouteIdsRef.current !== routeSignature) {
       currentRouteIdsRef.current = routeSignature;
 
@@ -599,11 +604,11 @@ const MapComponent = ({
           // Initialize the Routing Control
           routingControl.current = L.Routing.control({
             waypoints,
-            router: L.Routing.osrmv1({ 
-              serviceUrl: 'https://router.project-osrm.org/route/v1' 
+            router: L.Routing.osrmv1({
+              serviceUrl: 'https://router.project-osrm.org/route/v1'
             }),
-            lineOptions: { 
-              styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }] 
+            lineOptions: {
+              styles: [{ color: '#ef4444', weight: 6, opacity: 0.8 }]
             },
             createMarker: () => null, // Hide the default A/B markers
             addWaypoints: false,
@@ -612,7 +617,7 @@ const MapComponent = ({
           }).on('routesfound', (e) => {
             const route = e.routes[0];
             const distance = (route.summary.totalDistance / 1000).toFixed(1);
-            
+
             // 1. Update the UI distance
             if (setRouteDistance) setRouteDistance(distance);
 
@@ -671,7 +676,7 @@ function App() {
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
   const [isEngineOpen, setIsEngineOpen] = React.useState(false);
   const [plannerSearch, setPlannerSearch] = React.useState('');
-  const [selectedRoute, setSelectedRoute] = useState([]);  
+  const [selectedRoute, setSelectedRoute] = useState([]);
   const [routeData, setRouteData] = useState(null);
   const [routeDistance, setRouteDistance] = useState(0);
   const [userCoords, setUserCoords] = useState(null);
@@ -817,115 +822,115 @@ function App() {
     }
   }, [ViewingArticle]);
 
-// --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
+  // --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
 
-const handleLocationSelect = useCallback((lat, lng, dist) => {
-  setFormData(prev => ({
-    ...prev,
-    latitude: lat,
-    longitude: lng,
-    district: dist || prev.district
-  }));
-}, []);
+  const handleLocationSelect = useCallback((lat, lng, dist) => {
+    setFormData(prev => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+      district: dist || prev.district
+    }));
+  }, []);
 
-/**
- * RENDER LOGIC:
- * We use 'MapWidget' as the variable name to avoid conflict with the 
- * browser's 'window.Map' constructor.
- */
-const MemoizedAddMap = useMemo(() => (
-  <Suspense fallback={<div className="w-full h-full bg-slate-200 animate-pulse" />}>
-    <MapSelectionComponent 
-      onMapReady={(map) => setAddMapInstance(map)} 
-      onLocationSelect={handleLocationSelect}
-    />
-  </Suspense>
-), [handleLocationSelect]);
+  /**
+   * RENDER LOGIC:
+   * We use 'MapWidget' as the variable name to avoid conflict with the 
+   * browser's 'window.Map' constructor.
+   */
+  const MemoizedAddMap = useMemo(() => (
+    <Suspense fallback={<div className="w-full h-full bg-slate-200 animate-pulse" />}>
+      <MapSelectionComponent
+        onMapReady={(map) => setAddMapInstance(map)}
+        onLocationSelect={handleLocationSelect}
+      />
+    </Suspense>
+  ), [handleLocationSelect]);
 
-/**
- * AUTOCOMPLETE LOGIC:
- * Syncs Google Search results with the Leaflet map instance and places a visual marker.
- */
-useEffect(() => {
-  if (isAddOpen) {
-    let autocompleteInstance = null;
+  /**
+   * AUTOCOMPLETE LOGIC:
+   * Syncs Google Search results with the Leaflet map instance and places a visual marker.
+   */
+  useEffect(() => {
+    if (isAddOpen) {
+      let autocompleteInstance = null;
 
-    const initAutocomplete = async () => {
-      if (!window.google || !window.google.maps) return;
+      const initAutocomplete = async () => {
+        if (!window.google || !window.google.maps) return;
 
-      try {
-        const { Autocomplete } = await google.maps.importLibrary("places");
-        const input = document.getElementById('location-search');
-        if (!input) return;
+        try {
+          const { Autocomplete } = await google.maps.importLibrary("places");
+          const input = document.getElementById('location-search');
+          if (!input) return;
 
-        autocompleteInstance = new Autocomplete(input, {
-          fields: ["address_components", "geometry", "name", "url"],
-          componentRestrictions: { country: "lk" }
-        });
+          autocompleteInstance = new Autocomplete(input, {
+            fields: ["address_components", "geometry", "name", "url"],
+            componentRestrictions: { country: "lk" }
+          });
 
-        autocompleteInstance.addListener("place_changed", () => {
-          const place = autocompleteInstance.getPlace();
-          if (!place.geometry || !place.geometry.location) return;
+          autocompleteInstance.addListener("place_changed", () => {
+            const place = autocompleteInstance.getPlace();
+            if (!place.geometry || !place.geometry.location) return;
 
-          const lat = place.geometry.location.lat();
-          const lng = place.geometry.location.lng();
-          
-          const components = place.address_components || [];
-          const locality = components.find(c => c.types.includes("administrative_area_level_2"))?.long_name || 
-                           components.find(c => c.types.includes("locality"))?.long_name || "";
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
 
-          // 1. Update form data state
-          setFormData(prev => ({
-            ...prev,
-            place_name: place.name,
-            latitude: parseFloat(lat.toFixed(6)),
-            longitude: parseFloat(lng.toFixed(6)),
-            district: locality,
-            map_url: place.url
-          }));
+            const components = place.address_components || [];
+            const locality = components.find(c => c.types.includes("administrative_area_level_2"))?.long_name ||
+              components.find(c => c.types.includes("locality"))?.long_name || "";
 
-          // 2. Map Visual Sync: Fly to location AND drop the yellow marker
-          if (addMapInstance) {
-            addMapInstance.flyTo([lat, lng], 16, { 
-              animate: true, 
-              duration: 1.5 
-            });
+            // 1. Update form data state
+            setFormData(prev => ({
+              ...prev,
+              place_name: place.name,
+              latitude: parseFloat(lat.toFixed(6)),
+              longitude: parseFloat(lng.toFixed(6)),
+              district: locality,
+              map_url: place.url
+            }));
 
-            // Clear existing temporary markers from previous searches
-            if (tempMarkerRef.current) {
-              addMapInstance.removeLayer(tempMarkerRef.current);
+            // 2. Map Visual Sync: Fly to location AND drop the yellow marker
+            if (addMapInstance) {
+              addMapInstance.flyTo([lat, lng], 16, {
+                animate: true,
+                duration: 1.5
+              });
+
+              // Clear existing temporary markers from previous searches
+              if (tempMarkerRef.current) {
+                addMapInstance.removeLayer(tempMarkerRef.current);
+              }
+
+              // Create the signature yellow circle marker at the search result
+              tempMarkerRef.current = L.circleMarker([lat, lng], {
+                radius: 8,
+                fillColor: '#facc15', // Yellow-400
+                color: '#ca8a04',     // Yellow-600 border
+                weight: 3,
+                fillOpacity: 1
+              }).addTo(addMapInstance);
             }
+          });
+        } catch (err) {
+          console.error("Autocomplete init error:", err);
+        }
+      };
 
-            // Create the signature yellow circle marker at the search result
-            tempMarkerRef.current = L.circleMarker([lat, lng], {
-              radius: 8,
-              fillColor: '#facc15', // Yellow-400
-              color: '#ca8a04',     // Yellow-600 border
-              weight: 3,
-              fillOpacity: 1
-            }).addTo(addMapInstance);
-          }
-        });
-      } catch (err) {
-        console.error("Autocomplete init error:", err);
-      }
-    };
+      const retryInterval = setInterval(() => {
+        if (window.google?.maps) {
+          initAutocomplete();
+          clearInterval(retryInterval);
+        }
+      }, 500);
 
-    const retryInterval = setInterval(() => {
-      if (window.google?.maps) {
-        initAutocomplete();
+      return () => {
         clearInterval(retryInterval);
-      }
-    }, 500);
-
-    return () => {
-      clearInterval(retryInterval);
-      if (window.google?.maps?.event && autocompleteInstance) {
-        google.maps.event.clearInstanceListeners(autocompleteInstance);
-      }
-    };
-  }
-}, [isAddOpen, addMapInstance]);
+        if (window.google?.maps?.event && autocompleteInstance) {
+          google.maps.event.clearInstanceListeners(autocompleteInstance);
+        }
+      };
+    }
+  }, [isAddOpen, addMapInstance]);
 
   // --- 4. PLANNER & WEATHER ENGINE LOGIC ---
   useEffect(() => {
@@ -993,15 +998,16 @@ useEffect(() => {
     setPlaces(data || []);
   };
 
+
   /**
-   * TOGGLE NEARBY PLACES (Food, Gas, Hotels)
-   * Fixed to use mapRef instead of mapInstance
-   */
+     * TOGGLE NEARBY PLACES (Modern Implementation)
+     * Uses Google Places (New) with the Inline Bootstrap Loader.
+     */
   const toggleNearby = async (type) => {
     const isTurningOn = !toggles[type];
     setToggles(prev => ({ ...prev, [type]: isTurningOn }));
 
-    // 1. Clear markers if turning off
+    // 1. Handle Turning Off: Remove markers
     if (!isTurningOn) {
       nearbyMarkersRef.current = nearbyMarkersRef.current.filter(item => {
         if (item.type === type) {
@@ -1013,7 +1019,7 @@ useEffect(() => {
       return;
     }
 
-    // 2. Check the bridge state
+    // 2. Data Bridge Check
     if (!routeData || !routeData.coordinates) {
       showToast("Please plan a route first!", "error");
       setToggles(prev => ({ ...prev, [type]: false }));
@@ -1022,10 +1028,10 @@ useEffect(() => {
 
     try {
       await google.maps.importLibrary("places");
+      // Use the stable PlacesService from index.html
       const service = new google.maps.places.PlacesService(document.createElement('div'));
-      
+
       const coords = routeData.coordinates;
-      // Sample 15 points along the path to find locations along the whole road
       const sampleRate = Math.max(1, Math.floor(coords.length / 15));
       const pointsToSearch = coords.filter((_, index) => index % sampleRate === 0);
 
@@ -1034,24 +1040,35 @@ useEffect(() => {
       pointsToSearch.forEach((point) => {
         service.nearbySearch({
           location: new google.maps.LatLng(point.lat, point.lng),
-          radius: '5000', // 5km search radius
+          radius: '5000',
           type: type
         }, (results, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && mapRef.current) {
             results.forEach(place => {
-              const isHighQuality = place.rating >= 4.0 && (place.user_ratings_total || 0) >= 15;
-              const isFuel = type === 'gas_station';
+              const isHighQuality = place.rating >= 4.0 && (place.user_ratings_total || 0) >= 20;
+              const needsFiltering = type === 'restaurant' || type === 'lodging';
 
-              if (isFuel || isHighQuality) {
+              if (!needsFiltering || isHighQuality) {
                 const dot = L.circleMarker([place.geometry.location.lat(), place.geometry.location.lng()], {
-                  radius: 7,
+                  radius: 6,
                   fillColor: colors[type],
                   color: "#fff",
                   weight: 2,
+                  opacity: 1,
                   fillOpacity: 1
-                }).addTo(mapRef.current) // Uses the correct Map Reference
-                  .bindPopup(`<b>${place.name}</b><br/>Rating: ⭐${place.rating || 'N/A'}`);
-                
+                }).addTo(mapRef.current) // Successfully adds to the exposed map
+                  .bindPopup(`
+                    <div class="p-1 font-sans">
+                        <b class="text-slate-900 block">${place.name}</b>
+                        <span class="text-xs text-slate-500 block">${place.vicinity || ''}</span>
+                        ${place.rating ? `
+                            <div class="flex items-center mt-1 gap-1">
+                                <span class="text-amber-500 text-xs font-bold">★ ${place.rating}</span>
+                                <span class="text-[10px] text-slate-400">(${place.user_ratings_total} reviews)</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                  `);
                 nearbyMarkersRef.current.push({ type, marker: dot });
               }
             });
@@ -1059,7 +1076,9 @@ useEffect(() => {
         });
       });
     } catch (e) {
-      console.error("Nearby Search Error:", e);
+      console.error(e);
+      showToast("Failed to fetch nearby locations", "error");
+      setToggles(prev => ({ ...prev, [type]: false }));
     }
   };
 
@@ -1699,7 +1718,7 @@ useEffect(() => {
 
   }, [placesWithDistance, statusFilter, filterTag, debouncedSearch, sortBy, userCoords]);
 
-// --- Advertisement Loader ---
+  // --- Advertisement Loader ---
   useEffect(() => {
     // Check if the script is already present to avoid multiple loads
     const scriptId = 'adsterra-invoke-script';
@@ -1709,7 +1728,7 @@ useEffect(() => {
       script.async = true;
       script.dataset.cfasync = "false";
       script.src = "https://pl29174284.profitablecpmratenetwork.com/023accb7675231a6241cd0771cc13617/invoke.js";
-      
+
       // Append to head or body
       document.body.appendChild(script);
     }
@@ -2298,6 +2317,7 @@ useEffect(() => {
                 setRouteDistance={setRouteDistance}
                 setRouteData={setRouteData}
                 toggles={toggles}
+                mapInstanceRef={mapRef}
               />
 
               {/* Floating Map Label */}
