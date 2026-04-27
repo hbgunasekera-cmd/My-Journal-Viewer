@@ -74,54 +74,51 @@ const RenderDynamicIcon = ({ iconName, className }) => {
   return <IconComponent className={className} />;
 };
 
-function updateSEO(title, description, image) {
-  const siteName = "My Journal";
-  // Tab title logic
-  document.title = title === siteName ? siteName : `${title} | ${siteName}`;
+// 1. Updated Helper Function to handle Fallback/Home logic
+const updateSEO = (place) => {
+  // Define default values for Homepage
+  const defaultTitle = "My Journal";
+  const defaultDesc = "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations.";
+  const defaultImg = "https://your-domain.com/default-logo.png"; // Replace with your actual logo URL
 
-  // Standard Meta Tags
-  const metaDescription = document.querySelector('meta[name="description"]');
-  if (metaDescription) metaDescription.setAttribute('content', description);
+  // Determine content based on whether a place exists (Article vs Home)
+  const title = place ? `${place.place_name} | My Journal` : defaultTitle;
+  const description = place?.ai_article?.story 
+    ? place.ai_article.story.substring(0, 150) + "..." 
+    : defaultDesc;
+  const imageUrl = place?.cover_photo_url || defaultImg;
+  const shareUrl = place 
+    ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
+    : window.location.origin;
 
-  // Open Graph Tags (Social Media)
-  const ogTitle = document.querySelector('meta[property="og:title"]');
-  const ogDesc = document.querySelector('meta[property="og:description"]');
-  const ogImg = document.querySelector('meta[property="og:image"]');
+  // Update Browser Tab Title
+  document.title = title;
 
-  if (ogTitle) ogTitle.setAttribute('content', title);
-  if (ogDesc) ogDesc.setAttribute('content', description);
-  if (ogImg && image) ogImg.setAttribute('content', image);
-
-  // --- JSON-LD STRUCTURED DATA (Phase 3) ---
-  let schemaScript = document.getElementById('json-ld-schema');
-  if (!schemaScript) {
-    schemaScript = document.createElement('script');
-    schemaScript.id = 'json-ld-schema';
-    schemaScript.type = 'application/ld+json';
-    document.head.appendChild(schemaScript);
-  }
-
-  const schemaData = {
-    "@context": "https://schema.org",
-    "@type": "BlogPosting",
-    "headline": title,
-    "description": description,
-    "image": image || "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png",
-    "author": {
-      "@type": "Person",
-      "name": "Hasitha Gunasekera"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "My Journal",
-      "logo": {
-        "@type": "ImageObject",
-        "url": "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png"
-      }
-    }
+  // Update Meta Tags for Crawlers (Facebook/WhatsApp/X)
+  const metaTags = {
+    'og:title': title,
+    'og:description': description,
+    'og:image': imageUrl,
+    'og:url': shareUrl,
+    'twitter:title': title,
+    'twitter:description': description,
+    'twitter:image': imageUrl,
+    'twitter:card': 'summary_large_image'
   };
-  schemaScript.text = JSON.stringify(schemaData);
-}
+
+  Object.entries(metaTags).forEach(([prop, content]) => {
+    let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
+    if (!el) {
+      el = document.createElement('meta');
+      if (prop.startsWith('og:')) el.setAttribute('property', prop);
+      else el.setAttribute('name', prop);
+      document.head.appendChild(el);
+    }
+    el.setAttribute('content', content);
+  });
+};
+
+
 
 
 const MapSelectionComponent = React.memo(({ onLocationSelect, initialCoords, onMapReady }) => {
@@ -810,21 +807,11 @@ function App() {
     }
   }, [places]);
 
-  // Update Metadata & SEO based on current view
   useEffect(() => {
-    if (ViewingArticle) { // Fixed: matching state name 'ViewingArticle'
-      updateSEO(
-        ViewingArticle?.place_name,
-        ViewingArticle.description || `Explore ${ViewingArticle?.place_name} in ${ViewingArticle.district}, Sri Lanka.`,
-        ViewingArticle.image_url
-      );
-    } else {
-      updateSEO(
-        "My Journal",
-        "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations."
-      );
-    }
-  }, [ViewingArticle]);
+  
+  updateSEO(ViewingArticle);
+
+}, [ViewingArticle]);
 
   // --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
 
@@ -1327,10 +1314,42 @@ function App() {
   const handleShare = async (e, place) => {
     if (e) e.stopPropagation();
 
+    // 1. DYNAMIC SEO UPDATE 
+    // This updates the <head> tags so Facebook/WhatsApp crawlers see the location's image
+    if (place) {
+      const title = `${place.place_name} | My Journal`;
+      const description = `Explore ${place.place_name} on My Journal.`;
+      const imageUrl = place.cover_photo_url;
+      const shareUrl = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
+
+      document.title = title;
+
+      const metaTags = {
+        'og:title': title,
+        'og:description': description,
+        'og:image': imageUrl,
+        'og:url': shareUrl,
+        'twitter:image': imageUrl,
+        'twitter:card': 'summary_large_image'
+      };
+
+      Object.entries(metaTags).forEach(([prop, content]) => {
+        let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
+        if (!el) {
+          el = document.createElement('meta');
+          if (prop.startsWith('og:')) el.setAttribute('property', prop);
+          else el.setAttribute('name', prop);
+          document.head.appendChild(el);
+        }
+        el.setAttribute('content', content);
+      });
+    }
+
+    // 2. GENERATE SHARE CONTENT
     const url = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
     const shareText = `Check out this amazing spot on My Journal: ${place.place_name} ${url}`;
 
-    // 1. THE BULLETPROOF COPY LOGIC
+    // 3. BULLETPROOF COPY LOGIC (Immediate Execution)
     const copyToClipboard = async (text) => {
       try {
         await navigator.clipboard.writeText(text);
@@ -1354,14 +1373,12 @@ function App() {
       }
     };
 
-    // 2. EXECUTE COPY & SHOW TOAST (ENABLED FOR MOBILE)
     const copied = await copyToClipboard(shareText);
     if (copied) {
-      // Removed the "if (!mobile)" check so it shows on phones now
       showToast("Link & details copied!", "success");
     }
 
-    // 3. MOBILE NATIVE SHARE
+    // 4. MOBILE NATIVE SHARE (Opens native Apps)
     if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
       try {
         await navigator.share({
@@ -1369,13 +1386,13 @@ function App() {
           text: `Check out this amazing spot on My Journal: ${place.place_name}`,
           url: url
         });
-        return;
+        return; 
       } catch (err) {
-        return;
+        return; 
       }
     }
 
-    // 4. DESKTOP MODAL FALLBACK
+    // 5. DESKTOP MODAL FALLBACK
     setSharingData({
       name: place.place_name,
       url: url,
