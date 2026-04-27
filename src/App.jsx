@@ -1595,29 +1595,29 @@ function App() {
     );
 
     if (isDuplicate) {
-      addNotification("This spot is already in the Journal!", "error");
+      showToast("This spot is already in the Journal!", "error");
       return;
     }
 
     // 2. SUBMIT TO PENDING_APPROVALS
     try {
-      const { error } = await supabase
-        .from('pending_approvals') // Updated table name
+      const { error } = await supabaseClient
+        .from('pending_approvals')
         .insert([{
-          place_name: formData.place_name.trim(),
-          category: formData.category,
-          latitude: parseFloat(formData.latitude),
-          longitude: parseFloat(formData.longitude),
+          place_name: formData.place_name,
           district: formData.district,
+          latitude: formData.latitude,
+          longitude: formData.longitude,
           map_url: formData.map_url,
-          status: 'pending', // Explicitly set status
-          submitted_at: new Date().toISOString()
+          image_url: formData.image_url,
+          category: formData.category,
+          status: 'pending' 
         }]);
 
       if (error) throw error;
 
       // 3. SUCCESS FEEDBACK
-      addNotification("Success! Spot submitted for review.", "success");
+      showToast("Success! Spot submitted for review.", "success");
       setIsAddOpen(false);
 
       // Reset form for next time
@@ -1632,7 +1632,7 @@ function App() {
 
     } catch (err) {
       console.error("Submission error:", err);
-      addNotification("Failed to submit: " + err.message, "error");
+      showToast("Failed to submit: " + err.message, "error");
     }
   };
 
@@ -1935,8 +1935,8 @@ function App() {
                 key={tag}
                 onClick={() => setFilterTag(tag)}
                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all active:scale-95 ${filterTag === tag
-                    ? 'bg-slate-900 text-white shadow-lg'
-                    : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                  ? 'bg-slate-900 text-white shadow-lg'
+                  : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
                   }`}
               >
                 {tag}
