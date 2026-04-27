@@ -75,34 +75,38 @@ const RenderDynamicIcon = ({ iconName, className }) => {
 };
 
 const updateSEO = (place) => {
-  // Default values for Homepage
+  // 1. Setup Defaults
   const defaultTitle = "My Journal";
   const defaultDesc = "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations.";
   const defaultImg = "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png";
 
-  // Logic to determine values - prevents "undefined" by checking for place_name
-  const isArticle = place && place.place_name;
-  const title = isArticle ? `${place.place_name} | My Journal` : defaultTitle;
+  // 2. Logic Check: Ensure place is a valid object with a name
+  const hasPlace = place && typeof place === 'object' && place.place_name;
   
-  const description = isArticle 
-    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description) 
+  const title = hasPlace ? `${place.place_name} | My Journal` : defaultTitle;
+  
+  // Extract description: AI story -> description -> default
+  const description = hasPlace 
+    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description || defaultDesc) 
     : defaultDesc;
     
-  const imageUrl = isArticle ? place.cover_photo_url : defaultImg;
+  // CRITICAL: Prioritize the high-res cover photo for social cards
+  const imageUrl = hasPlace ? (place.cover_photo_url || place.image_url || defaultImg) : defaultImg;
   
-  const shareUrl = isArticle 
+  const shareUrl = hasPlace 
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
 
-  // Update the Browser Tab Title
+  // 3. Update the actual Browser Tab Title
   document.title = title;
 
-  // Update Meta Tags for social crawlers
+  // 4. Update/Create Meta Tags for Social Crawlers
   const metaTags = {
     'og:title': title,
     'og:description': description,
     'og:image': imageUrl,
     'og:url': shareUrl,
+    'og:type': 'website',
     'twitter:title': title,
     'twitter:description': description,
     'twitter:image': imageUrl,
@@ -112,6 +116,7 @@ const updateSEO = (place) => {
   Object.entries(metaTags).forEach(([prop, content]) => {
     let el = document.querySelector(`meta[property="${prop}"]`) || 
              document.querySelector(`meta[name="${prop}"]`);
+    
     if (!el) {
       el = document.createElement('meta');
       if (prop.startsWith('og:')) el.setAttribute('property', prop);
