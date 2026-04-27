@@ -665,11 +665,13 @@ function App() {
   const [visibleCount, setVisibleCount] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTag, setFilterTag] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('done'); // Removed duplicate
+  const [statusFilter, setStatusFilter] = useState('done');
   const [sortBy, setSortBy] = useState('recent');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isArticleOpen, setIsArticleOpen] = useState(false); // Standardized camelCase
-  const [ViewingArticle, setViewingArticle] = useState(null); // Standardized camelCase
+  const [isArticleOpen, setIsArticleOpen] = useState(false);
+  const [ViewingArticle, setViewingArticle] = useState(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [sharingData, setSharingData] = useState(null);
 
   // --- 2. Adventure Engine & Planner State ---
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
@@ -685,8 +687,9 @@ function App() {
   const [isSocialOpen, setIsSocialOpen] = useState(false);
   const [likes, setLikes] = useState({});
   const [comments, setComments] = useState({});
-  const [NewCommentText, setNewCommentText] = useState(''); // Standardized camelCase
+  const [NewCommentText, setNewCommentText] = useState('');
   const [notifications, setNotifications] = useState([]);
+
 
   // --- 4. Navigation & FAB (Floating Action Button) ---
   const [isFabExpanded, setIsFabExpanded] = useState(false);
@@ -1321,6 +1324,66 @@ function App() {
     }
   };
 
+  const handleShare = async (e, place) => {
+    if (e) e.stopPropagation();
+
+    const url = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
+    const shareText = `Check out this amazing spot on My Journal: ${place.place_name} ${url}`;
+
+    // 1. THE BULLETPROOF COPY LOGIC
+    const copyToClipboard = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          textArea.style.top = "0";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          return successful;
+        } catch (fallbackErr) {
+          return false;
+        }
+      }
+    };
+
+    // 2. EXECUTE COPY & SHOW TOAST (ENABLED FOR MOBILE)
+    const copied = await copyToClipboard(shareText);
+    if (copied) {
+      // Removed the "if (!mobile)" check so it shows on phones now
+      showToast("Link & details copied!", "success");
+    }
+
+    // 3. MOBILE NATIVE SHARE
+    if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      try {
+        await navigator.share({
+          title: `${place.place_name} | My Journal`,
+          text: `Check out this amazing spot on My Journal: ${place.place_name}`,
+          url: url
+        });
+        return;
+      } catch (err) {
+        return;
+      }
+    }
+
+    // 4. DESKTOP MODAL FALLBACK
+    setSharingData({
+      name: place.place_name,
+      url: url,
+      text: `Check out this amazing spot on My Journal: ${place.place_name}`
+    });
+    setIsShareModalOpen(true);
+  };
+
   const logVisit = async (path = 'Main Page') => {
     // 1. Environment Check
     if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
@@ -1364,7 +1427,7 @@ function App() {
           };
           break;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!geo || !geo.ip) {
@@ -1839,7 +1902,7 @@ function App() {
             </button>
 
             {/* Standardized Dual Hub System (Fixed positioning) */}
-            {!isAddOpen && !isPlannerOpen && !isArticleOpen && (
+            {!isAddOpen && !isPlannerOpen && !isArticleOpen && !isShareModalOpen && (
               <div className="fixed bottom-4 right-3 z-[4000] flex flex-col items-end gap-2 max-w-[140px]">
                 {/* HUB 1: SOCIAL HUB */}
                 <div className="flex flex-col items-end gap-2">
@@ -1954,22 +2017,17 @@ function App() {
 
           {/* Location Cards Section */}
           {displayedPlaces.map(place => (
-            /* SEMANTIC ARTICLE: Each card is now an independent content piece for SEO */
             <article
               key={place.id}
               className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl"
             >
-              {/* SEMANTIC HEADER: Contains the primary visual and title information */}
               <header className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden">
                 {place.cover_photo_url && (
                   <img
-                    /* PHASE 4 FIX: Optimization utility applied for 600px cards */
                     src={getOptimizedUrl(place.cover_photo_url, 600, 75)}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    /* PHASE 4 FIX: Native lazy loading prevents loading images outside the viewport */
                     loading="lazy"
-                    /* ACCESSIBILITY: Descriptive alt text for SEO discovery */
-                    alt={`Scenic view of ${place.place_name} in Sri Lanka`}
+                    alt={`Scenic view of ${place.place_name}`}
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
@@ -1985,14 +2043,12 @@ function App() {
                 </div>
 
                 <div className="absolute bottom-3 left-4 pr-4">
-                  {/* SEMANTIC H3: Maintains a clear heading hierarchy for search crawlers */}
                   <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
                     {auditLocationName(place.place_name)}
                   </h3>
                 </div>
               </header>
 
-              {/* SEMANTIC MAIN: Content area for metadata and user interactions */}
               <main className="p-4 flex flex-col flex-1">
                 <div className="flex justify-between items-start mb-1">
                   <div className="flex flex-col min-w-0">
@@ -2005,20 +2061,19 @@ function App() {
                   </span>
                 </div>
 
-                {/* Distance Display */}
                 <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
                   {userCoords
                     ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY`
                     : "Location Access Required"}
                 </div>
 
-                {/* Interactions Section */}
+                {/* Interactions Section - Consolidated Fix */}
                 {place.status !== 'pending' && (
-                  <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-50">
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-50">
                     {/* Like Button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
-                      className="flex items-center gap-1.5 group outline-none select-none"
+                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
                       aria-label="Like this destination"
                     >
                       <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
@@ -2030,7 +2085,7 @@ function App() {
                     {/* Comment Button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setIsArticleOpen(true); }}
-                      className="flex items-center gap-1.5 group outline-none select-none"
+                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
                       aria-label="View comments"
                     >
                       <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
@@ -2038,50 +2093,51 @@ function App() {
                       </div>
                       <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
                     </button>
+
+                    {/* Share Button (Triggering Custom Dialog) */}
+                    <button
+                      onClick={(e) => handleShare(e, place)}
+                      className="flex items-center gap-1.5 group outline-none select-none"
+                      aria-label="Share this location"
+                    >
+                      <div className="p-2 rounded-full group-hover:bg-emerald-50 transition-colors">
+                        <Share2 className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
+                      </div>
+                    </button>
                   </div>
                 )}
 
                 {/* Action Buttons Section */}
                 <footer className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
-                  {/* MAPS BUTTON */}
                   {place.google_maps_url && (
                     <button
                       onClick={() => window.open(place.google_maps_url, '_blank')}
                       className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all outline-none select-none border border-slate-100/50 group"
-                      title="Open in Google Maps"
                     >
                       <MapIcon className="w-6 h-6" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
                     </button>
                   )}
 
-                  {/* GALLERY BUTTON */}
                   {place.album_photos && (
                     <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setActiveId(place.id);
-                      }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveId(place.id); }}
                       className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-90 transition-all outline-none select-none border border-orange-100/50 group"
-                      title="View Photo Gallery"
                     >
-                      <ImageIcon className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                      <ImageIcon className="w-3.5 h-3.5" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
                     </button>
                   )}
 
-                  {/* READ BUTTON */}
                   {place.ai_article?.story && (
                     <button
                       onClick={() => {
-                        if (typeof setViewingArticle === 'function') setViewingArticle(place);
-                        if (typeof setIsArticleOpen === 'function') setIsArticleOpen(true);
+                        setViewingArticle(place);
+                        setIsArticleOpen(true);
                       }}
                       className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
-                      title="Read Travel Story"
                     >
-                      <BookOpen className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                      <BookOpen className="w-3.5 h-3.5" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
                     </button>
                   )}
@@ -2089,6 +2145,86 @@ function App() {
               </main>
             </article>
           ))}
+
+          {/* --- CUSTOM SHARE DIALOG --- */}
+          {isShareModalOpen && sharingData && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                onClick={() => setIsShareModalOpen(false)}
+              ></div>
+
+              <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Share2 className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Share Journey</h3>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">{sharingData.name}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* WhatsApp: Supports Text + Link */}
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(sharingData.text + " " + sharingData.url)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 transition-colors group text-center"
+                  >
+                    <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-110 transition-transform">
+                      <MessageCircle className="w-5 h-5 fill-current" />
+                    </div>
+                    <span className="text-[9px] font-black text-emerald-700 uppercase tracking-tighter">WhatsApp</span>
+                  </a>
+
+                  {/* Facebook: ONLY URL (Facebook handles the preview via your SEO tags) */}
+                  <a
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharingData.url)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-colors group text-center"
+                  >
+                    <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
+                      <span className="font-black text-lg">f</span>
+                    </div>
+                    <span className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">Facebook</span>
+                  </a>
+
+                  {/* X (Twitter): Supports Text + Link */}
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(sharingData.text)}&url=${encodeURIComponent(sharingData.url)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-slate-50 hover:bg-slate-200 transition-colors group text-center"
+                  >
+                    <div className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center shadow-lg shadow-slate-300 group-hover:scale-110 transition-transform">
+                      <X className="w-4 h-4" />
+                    </div>
+                    <span className="text-[9px] font-black text-slate-700 uppercase tracking-tighter">Twitter (X)</span>
+                  </a>
+
+                  {/* Copy Link: The most reliable way for Instagram/Stories */}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(sharingData.url);
+                      showToast("Link ready to paste!", "success");
+                      setIsShareModalOpen(false);
+                    }}
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-indigo-50 hover:bg-indigo-100 transition-colors group text-center"
+                  >
+                    <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
+                      <ImageIcon className="w-4 h-4" />
+                    </div>
+                    <span className="text-[9px] font-black text-indigo-700 uppercase tracking-tighter">Copy Link</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setIsShareModalOpen(false)}
+                  className="w-full mt-8 py-4 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-slate-900 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ADVERTISEMENT BLOCK - Integrated as a Grid Item */}
           <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
@@ -2149,6 +2285,16 @@ function App() {
                   {ViewingArticle.category}
                 </span>
                 <div className="flex items-center gap-2">
+
+                  {/* Share Button (Updated to trigger Custom Dialog) */}
+                  <button
+                    onClick={() => handleShare(null, ViewingArticle)}
+                    className="p-2 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-100 rounded-xl transition-colors border border-slate-100 group"
+                    title="Share this location"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-600" />
+                  </button>
+
                   <button
                     onClick={() => window.open(ViewingArticle.google_maps_url || `https://www.google.com/maps?q=${ViewingArticle.latitude},${ViewingArticle.longitude}`, '_blank')}
                     className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors border border-slate-100"
@@ -2156,13 +2302,11 @@ function App() {
                     <MapPin className="w-3.5 h-3.5 text-slate-500" />
                   </button>
 
-                  {/* Reaction button - Only rendered if status is not pending */}
                   {ViewingArticle.status !== 'pending' && (
                     <button
                       onClick={() => handleLike(ViewingArticle.id)}
                       className="flex items-center gap-2 bg-slate-50 hover:bg-rose-50 px-4 py-2 rounded-2xl border border-slate-100 transition-all"
                     >
-                      {/* Changed likes[place.id] to likes[ViewingArticle.id] */}
                       <Heart
                         className={`w-4 h-4 ${likes[ViewingArticle.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`}
                       />
@@ -2196,13 +2340,10 @@ function App() {
                 )}
               </div>
 
-
-
-
               {/* DISCUSSION SECTION */}
               <div className="border-t border-slate-100 pt-8">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
-                  <i data-lucide="message-circle" className="w-3 h-3"></i>
+                  <MessageCircle className="w-3 h-3" />
                   Discussion ({comments[ViewingArticle.id]?.length || 0})
                 </h4>
 
