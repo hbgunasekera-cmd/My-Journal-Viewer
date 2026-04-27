@@ -1322,32 +1322,32 @@ function App() {
   };
 
   const logVisit = async (path = 'Main Page') => {
-    // 1. Environment Check (HIGHEST PRIORITY)
+    // 1. Environment Check
     if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
       return;
     }
 
-    // 2. IMMEDIATE LOCK (Prevents double-trigger race conditions)
+    // 2. SECRET URL ACTIVATION
+    // If you visit yoursite.com/?mode=owner, it sets the token automatically
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'owner') {
+      localStorage.setItem('owner_auth_token', 'owner');
+      console.log("Owner mode activated via URL.");
+    }
+
+    // 3. Owner Exclusion Check
+    const ownerToken = localStorage.getItem('owner_auth_token');
+    if (ownerToken === 'owner') {
+      return; // Exit immediately, no logging happens
+    }
+
+    // 4. IMMEDIATE LOCK (For actual visitors)
     if (path === 'Main Page') {
-      if (sessionStorage.getItem('visit_logged')) {
-        return;
-      }
-      // Lock it immediately before any async 'await' calls
+      if (sessionStorage.getItem('visit_logged')) return;
       sessionStorage.setItem('visit_logged', 'true');
     }
 
-    // 3. Owner Exclusion Logic (Secret Token Method)
-    // To ignore your own visits, run this in your browser console:
-    // localStorage.setItem('owner_auth_token', 'owner');
-    const ownerToken = localStorage.getItem('owner_auth_token');
-    const SECRET_KEY = 'owner';
-
-    if (ownerToken === SECRET_KEY) {
-      console.log("Owner session detected. Skipping analytics.");
-      return;
-    }
-
-    // 4. Fetch Geographic Data
+    // 5. Fetch Geographic Data
     let geo = null;
     const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
 
@@ -1364,19 +1364,16 @@ function App() {
           };
           break;
         }
-      } catch (e) {
-        // Silent catch to try next provider
-      }
+      } catch (e) {}
     }
 
-    // Handle failure to get Geo data
     if (!geo || !geo.ip) {
       if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
       return;
     }
 
-    // 5. Submit to Database
-    const ua = navigator.userAgent; // Defined here for the insert payload
+    // 6. Submit to Database
+    const ua = navigator.userAgent;
     const { error } = await supabaseClient
       .from('page_visits')
       .insert([{
@@ -1388,10 +1385,8 @@ function App() {
         ip_address: geo.ip
       }]);
 
-    if (error) {
-      // If logging fails, clear the lock so it can try again on refresh
-      if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
-      console.error("Visit log error:", error.message);
+    if (error && path === 'Main Page') {
+      sessionStorage.removeItem('visit_logged');
     }
   };
 
