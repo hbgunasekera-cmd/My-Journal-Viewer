@@ -1336,9 +1336,18 @@ function App() {
       sessionStorage.setItem('visit_logged', 'true');
     }
 
+    // 3. Owner Exclusion Logic (Secret Token Method)
+    // To ignore your own visits, run this in your browser console:
+    // localStorage.setItem('owner_auth_token', 'owner');
+    const ownerToken = localStorage.getItem('owner_auth_token');
+    const SECRET_KEY = 'owner';
 
+    if (ownerToken === SECRET_KEY) {
+      console.log("Owner session detected. Skipping analytics.");
+      return;
+    }
 
-    // 3. Fetch Geographic Data
+    // 4. Fetch Geographic Data
     let geo = null;
     const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
 
@@ -1353,34 +1362,21 @@ function App() {
             region: data.region_name || data.stateProv || data.region || 'Unknown',
             city: data.city || 'Unknown'
           };
-
           break;
         }
       } catch (e) {
-
+        // Silent catch to try next provider
       }
     }
 
     // Handle failure to get Geo data
     if (!geo || !geo.ip) {
-
       if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
       return;
     }
 
-    const ownerToken = localStorage.getItem('owner_auth_token');
-
-    const SECRET_KEY = 'owner';
-
-    if (ownerToken === SECRET_KEY) {
-
-      console.log("Owner session detected. Skipping analytics.");
-      return;
-
-    }
-
     // 5. Submit to Database
-
+    const ua = navigator.userAgent; // Defined here for the insert payload
     const { error } = await supabaseClient
       .from('page_visits')
       .insert([{
@@ -1393,10 +1389,9 @@ function App() {
       }]);
 
     if (error) {
-
+      // If logging fails, clear the lock so it can try again on refresh
       if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
-    } else {
-
+      console.error("Visit log error:", error.message);
     }
   };
 
