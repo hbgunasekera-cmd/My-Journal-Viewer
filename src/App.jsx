@@ -39,6 +39,38 @@ const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
 const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
 
 
+const GoogleBottomAd = () => {
+  const adRef = useRef(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        // Only push if the ad slot is empty and script is loaded
+        if (window.adsbygoogle && adRef.current?.innerHTML.trim() === "") {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        }
+      } catch (e) {
+        console.error("AdSense Error:", e);
+      }
+    }, 500); // 500ms safety delay
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="my-8 flex justify-center w-full min-h-[100px] overflow-hidden bg-slate-50/50 rounded-xl">
+      <ins
+        ref={adRef}
+        className="adsbygoogle"
+        style={{ display: 'block', width: '100%' }}
+        data-ad-client="ca-pub-1964470435370150"
+        data-ad-slot="6165048740"
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      />
+    </div>
+  );
+};
 
 /**
  * SEO & Performance Helpers
@@ -54,8 +86,6 @@ const getOptimizedUrl = (url, width, quality = 70) => {
   }
   return url;
 };
-
-
 
 /**
  * Icon & UI Components
@@ -82,18 +112,18 @@ const updateSEO = (place) => {
 
   // 2. Logic Check: Ensure place is a valid object with a name
   const hasPlace = place && typeof place === 'object' && place.place_name;
-  
+
   const title = hasPlace ? `${place.place_name} | My Journal` : defaultTitle;
-  
+
   // Extract description: AI story -> description -> default
-  const description = hasPlace 
-    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description || defaultDesc) 
+  const description = hasPlace
+    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description || defaultDesc)
     : defaultDesc;
-    
+
   // CRITICAL: Prioritize the high-res cover photo for social cards
   const imageUrl = hasPlace ? (place.cover_photo_url || place.image_url || defaultImg) : defaultImg;
-  
-  const shareUrl = hasPlace 
+
+  const shareUrl = hasPlace
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
 
@@ -114,9 +144,9 @@ const updateSEO = (place) => {
   };
 
   Object.entries(metaTags).forEach(([prop, content]) => {
-    let el = document.querySelector(`meta[property="${prop}"]`) || 
-             document.querySelector(`meta[name="${prop}"]`);
-    
+    let el = document.querySelector(`meta[property="${prop}"]`) ||
+      document.querySelector(`meta[name="${prop}"]`);
+
     if (!el) {
       el = document.createElement('meta');
       if (prop.startsWith('og:')) el.setAttribute('property', prop);
@@ -126,7 +156,6 @@ const updateSEO = (place) => {
     el.setAttribute('content', content || "");
   });
 };
-
 
 const MapSelectionComponent = React.memo(({ onLocationSelect, initialCoords, onMapReady }) => {
   const mapRef = useRef(null);
@@ -814,11 +843,11 @@ function App() {
     }
   }, [places]);
 
- useEffect(() => {
-  
-  updateSEO(ViewingArticle);
+  useEffect(() => {
 
-}, [ViewingArticle]);
+    updateSEO(ViewingArticle);
+
+  }, [ViewingArticle]);
 
   // --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
 
@@ -1137,12 +1166,15 @@ function App() {
 
   // --- Scroll Handler Fix ---
   const handleScroll = useCallback((e) => {
+
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-    if (scrollHeight - scrollTop <= clientHeight + 150) {
-      if (visibleCount < filteredPlaces.length) {
-        setVisibleCount(prev => prev + 20);
-      }
+
+    const isNearBottom = scrollHeight - scrollTop <= clientHeight + 150;
+
+    if (isNearBottom && visibleCount < filteredPlaces.length) {
+      setVisibleCount(prev => prev + 20);
     }
+
   }, [visibleCount, filteredPlaces.length]);
 
 
@@ -2034,9 +2066,9 @@ function App() {
 
 
       <div
-        className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list"
-        onScroll={handleScroll}
-      >
+      className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list"
+      onScroll={handleScroll}
+    >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
 
           {/* Location Cards Section */}
@@ -2262,6 +2294,9 @@ function App() {
 
         </div>
 
+        <div className="w-full max-w-5xl mx-auto px-4">
+          <GoogleBottomAd />
+        </div>
 
         {/* ADD THE FOOTER HERE - Inside the scrollable area */}
         <footer className="py-10 text-center border-t border-slate-100 mt-10">
