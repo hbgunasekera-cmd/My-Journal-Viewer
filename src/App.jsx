@@ -28,41 +28,6 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// --- Google AdSense Component (Robust Version) ---
-const GoogleAdUnit = () => {
-  const adRef = useRef(null);
-
-  useEffect(() => {
-    // 1. Add a small delay to ensure the browser has calculated widths (Fixes AvailableWidth=0)
-    const timeout = setTimeout(() => {
-      try {
-        // 2. Check if the ad is already loaded to prevent duplicate push (Fixes "Already have ads")
-        if (adRef.current && adRef.current.getAttribute('data-adsbygoogle-status') !== 'done') {
-          (window.adsbygoogle = window.adsbygoogle || []).push({});
-        }
-      } catch (e) {
-        // Silently catch ad-blocker or layout errors
-      }
-    }, 500); 
-
-    return () => clearTimeout(timeout);
-  }, []);
-
-  return (
-    <div className="my-6 flex justify-center w-full min-h-[100px] overflow-hidden">
-      <ins
-        ref={adRef}
-        className="adsbygoogle"
-        style={{ display: 'block', width: '100%', minWidth: '250px' }}
-        data-ad-client="ca-pub-1964470435370150"
-        data-ad-slot="6165048740"
-        data-ad-format="auto"
-        data-full-width-responsive="true"
-      />
-    </div>
-  );
-};
-
 // Configuration
 const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
@@ -117,18 +82,18 @@ const updateSEO = (place) => {
 
   // 2. Logic Check: Ensure place is a valid object with a name
   const hasPlace = place && typeof place === 'object' && place.place_name;
-
+  
   const title = hasPlace ? `${place.place_name} | My Journal` : defaultTitle;
-
+  
   // Extract description: AI story -> description -> default
-  const description = hasPlace
-    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description || defaultDesc)
+  const description = hasPlace 
+    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description || defaultDesc) 
     : defaultDesc;
-
+    
   // CRITICAL: Prioritize the high-res cover photo for social cards
   const imageUrl = hasPlace ? (place.cover_photo_url || place.image_url || defaultImg) : defaultImg;
-
-  const shareUrl = hasPlace
+  
+  const shareUrl = hasPlace 
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
 
@@ -149,9 +114,9 @@ const updateSEO = (place) => {
   };
 
   Object.entries(metaTags).forEach(([prop, content]) => {
-    let el = document.querySelector(`meta[property="${prop}"]`) ||
-      document.querySelector(`meta[name="${prop}"]`);
-
+    let el = document.querySelector(`meta[property="${prop}"]`) || 
+             document.querySelector(`meta[name="${prop}"]`);
+    
     if (!el) {
       el = document.createElement('meta');
       if (prop.startsWith('og:')) el.setAttribute('property', prop);
@@ -386,7 +351,7 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                 src={getOptimizedUrl(photos[activeIndex], 1200, 85)}
                 className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500"
                 alt={`${placeName || 'Gallery'} featured view`}
-                fetchPriority="high"
+                fetchpriority="high"
               />
               {/* Signature Watermark */}
               <div className="absolute bottom-6 right-6 pointer-events-none select-none">
@@ -697,8 +662,6 @@ const MapComponent = ({
   return <div ref={mapRef} className="h-full w-full z-0" />;
 };
 
-
-
 function App() {
 
   // --- 1. Core Data & UI State ---
@@ -851,11 +814,11 @@ function App() {
     }
   }, [places]);
 
-  useEffect(() => {
+ useEffect(() => {
+  
+  updateSEO(ViewingArticle);
 
-    updateSEO(ViewingArticle);
-
-  }, [ViewingArticle]);
+}, [ViewingArticle]);
 
   // --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
 
@@ -1854,9 +1817,6 @@ function App() {
     }
   }, []);
 
-
-  // --- Privacy Modal ---
-
   const PrivacyModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
@@ -2291,18 +2251,17 @@ function App() {
           )}
 
           {/* ADVERTISEMENT BLOCK - Integrated as a Grid Item */}
-
           <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
-            {/* The Adsterra script will inject the ad here */}
             <div id="container-023accb7675231a6241cd0771cc13617" className="w-full h-full flex items-center justify-center">
+              {/* The Adsterra script will inject the ad here */}
             </div>
             <div className="absolute top-4 right-4">
               <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
             </div>
           </div>
+
         </div>
 
-              <GoogleAdUnit />
 
         {/* ADD THE FOOTER HERE - Inside the scrollable area */}
         <footer className="py-10 text-center border-t border-slate-100 mt-10">
