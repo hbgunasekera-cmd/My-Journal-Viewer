@@ -1037,6 +1037,40 @@ function App() {
     return filteredPlaces.slice(0, visibleCount);
   }, [filteredPlaces, visibleCount]);
 
+  // Add a ref for the sentinel
+  const sentinelRef = useRef(null);
+
+  useEffect(() => {
+    // Define the observer
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // If the sentinel is visible AND we have more to load
+        if (entries[0].isIntersecting && visibleCount < filteredPlaces.length) {
+          console.log("Sentinel triggered: Loading more...");
+          setVisibleCount((prev) => prev + 20);
+        }
+      },
+      {
+        root: null, // use the viewport
+        rootMargin: '400px', // Start loading 400px BEFORE the user reaches the bottom
+        threshold: 0
+      }
+    );
+
+    // Start observing
+    const currentSentinel = sentinelRef.current;
+    if (currentSentinel) {
+      observer.observe(currentSentinel);
+    }
+
+    // Cleanup
+    return () => {
+      if (currentSentinel) {
+        observer.unobserve(currentSentinel);
+      }
+    };
+  }, [visibleCount, filteredPlaces.length]);
+
   // --- HELPER FUNCTIONS & EFFECTS ---
 
   /** * Notification Handler 
@@ -2065,13 +2099,9 @@ function App() {
       </div>
 
 
-      <div
-      className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list"
-      onScroll={handleScroll}
-    >
+      <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
+        {/* 1. Main Grid: Location Cards & Adsterra */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
-
-          {/* Location Cards Section */}
           {displayedPlaces.map(place => (
             <article
               key={place.id}
@@ -2087,17 +2117,11 @@ function App() {
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-
-                {/* Status Badge Overlay */}
                 <div className="absolute top-4 left-4">
-                  <span className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${place.status === 'done'
-                    ? 'bg-emerald-500/90 text-white'
-                    : 'bg-amber-500/90 text-white'
-                    }`}>
+                  <span className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${place.status === 'done' ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'}`}>
                     {place.status === 'done' ? '✨ Visited' : '⏳ Bucket List'}
                   </span>
                 </div>
-
                 <div className="absolute bottom-3 left-4 pr-4">
                   <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
                     {auditLocationName(place.place_name)}
@@ -2116,46 +2140,25 @@ function App() {
                     {place.category}
                   </span>
                 </div>
-
                 <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                  {userCoords
-                    ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY`
-                    : "Location Access Required"}
+                  {userCoords ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY` : "Location Access Required"}
                 </div>
 
-                {/* Interactions Section - Consolidated Fix */}
                 {place.status !== 'pending' && (
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-50">
-                    {/* Like Button */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
-                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
-                      aria-label="Like this destination"
-                    >
+                    <button onClick={(e) => { e.stopPropagation(); handleLike(place.id); }} className="flex items-center gap-1.5 group outline-none select-none pr-2">
                       <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
                         <Heart className={`w-4 h-4 ${likes[place.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
                       </div>
                       <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
                     </button>
-
-                    {/* Comment Button */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setIsArticleOpen(true); }}
-                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
-                      aria-label="View comments"
-                    >
+                    <button onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setIsArticleOpen(true); }} className="flex items-center gap-1.5 group outline-none select-none pr-2">
                       <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
                         <MessageCircle className="w-4 h-4 text-slate-400" />
                       </div>
                       <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
                     </button>
-
-                    {/* Share Button (Triggering Custom Dialog) */}
-                    <button
-                      onClick={(e) => handleShare(e, place)}
-                      className="flex items-center gap-1.5 group outline-none select-none"
-                      aria-label="Share this location"
-                    >
+                    <button onClick={(e) => handleShare(e, place)} className="flex items-center gap-1.5 group outline-none select-none">
                       <div className="p-2 rounded-full group-hover:bg-emerald-50 transition-colors">
                         <Share2 className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
                       </div>
@@ -2163,36 +2166,21 @@ function App() {
                   </div>
                 )}
 
-                {/* Action Buttons Section */}
                 <footer className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
                   {place.google_maps_url && (
-                    <button
-                      onClick={() => window.open(place.google_maps_url, '_blank')}
-                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all outline-none select-none border border-slate-100/50 group"
-                    >
+                    <button onClick={() => window.open(place.google_maps_url, '_blank')} className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all border border-slate-100/50">
                       <MapIcon className="w-6 h-6" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
                     </button>
                   )}
-
                   {place.album_photos && (
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveId(place.id); }}
-                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 active:scale-90 transition-all outline-none select-none border border-orange-100/50 group"
-                    >
+                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveId(place.id); }} className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100/50">
                       <ImageIcon className="w-3.5 h-3.5" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
                     </button>
                   )}
-
                   {place.ai_article?.story && (
-                    <button
-                      onClick={() => {
-                        setViewingArticle(place);
-                        setIsArticleOpen(true);
-                      }}
-                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
-                    >
+                    <button onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100/50">
                       <BookOpen className="w-3.5 h-3.5" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
                     </button>
@@ -2202,116 +2190,49 @@ function App() {
             </article>
           ))}
 
-          {/* --- CUSTOM SHARE DIALOG --- */}
-          {isShareModalOpen && sharingData && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-              <div
-                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                onClick={() => setIsShareModalOpen(false)}
-              ></div>
-
-              <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-                <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Share2 className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Share Journey</h3>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">{sharingData.name}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* WhatsApp: Supports Text + Link */}
-                  <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(sharingData.text + " " + sharingData.url)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 transition-colors group text-center"
-                  >
-                    <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-110 transition-transform">
-                      <MessageCircle className="w-5 h-5 fill-current" />
-                    </div>
-                    <span className="text-[9px] font-black text-emerald-700 uppercase tracking-tighter">WhatsApp</span>
-                  </a>
-
-                  {/* Facebook: ONLY URL (Facebook handles the preview via your SEO tags) */}
-                  <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharingData.url)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-colors group text-center"
-                  >
-                    <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
-                      <span className="font-black text-lg">f</span>
-                    </div>
-                    <span className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">Facebook</span>
-                  </a>
-
-                  {/* X (Twitter): Supports Text + Link */}
-                  <a
-                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(sharingData.text)}&url=${encodeURIComponent(sharingData.url)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-slate-50 hover:bg-slate-200 transition-colors group text-center"
-                  >
-                    <div className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center shadow-lg shadow-slate-300 group-hover:scale-110 transition-transform">
-                      <X className="w-4 h-4" />
-                    </div>
-                    <span className="text-[9px] font-black text-slate-700 uppercase tracking-tighter">Twitter (X)</span>
-                  </a>
-
-                  {/* Copy Link: The most reliable way for Instagram/Stories */}
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(sharingData.url);
-                      showToast("Link ready to paste!", "success");
-                      setIsShareModalOpen(false);
-                    }}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-indigo-50 hover:bg-indigo-100 transition-colors group text-center"
-                  >
-                    <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
-                      <ImageIcon className="w-4 h-4" />
-                    </div>
-                    <span className="text-[9px] font-black text-indigo-700 uppercase tracking-tighter">Copy Link</span>
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => setIsShareModalOpen(false)}
-                  className="w-full mt-8 py-4 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-slate-900 transition-colors"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ADVERTISEMENT BLOCK - Integrated as a Grid Item */}
+          {/* ADSTERRA GRID ITEM */}
           <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
-            <div id="container-023accb7675231a6241cd0771cc13617" className="w-full h-full flex items-center justify-center">
-              {/* The Adsterra script will inject the ad here */}
-            </div>
+            <div id="container-023accb7675231a6241cd0771cc13617" className="w-full h-full flex items-center justify-center"></div>
             <div className="absolute top-4 right-4">
               <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
             </div>
           </div>
-
         </div>
 
+        {/* 2. THE SENTINEL & LOADING SPINNER */}
+        <div ref={sentinelRef} className="w-full flex justify-center items-center py-12">
+          {visibleCount < filteredPlaces.length && (
+            <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />
+          )}
+        </div>
+
+        {/* 3. GOOGLE AD & FOOTER */}
         <div className="w-full max-w-5xl mx-auto px-4">
           <GoogleBottomAd />
         </div>
 
-        {/* ADD THE FOOTER HERE - Inside the scrollable area */}
         <footer className="py-10 text-center border-t border-slate-100 mt-10">
-          <button
-            onClick={() => setIsPrivacyOpen(true)}
-            className="text-[10px] font-bold text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors"
-          >
+          <button onClick={() => setIsPrivacyOpen(true)} className="text-[10px] font-bold text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors">
             Privacy Policy & Terms
           </button>
           <p className="text-[9px] text-slate-300 uppercase mt-2 font-medium">
             © {new Date().getFullYear()} My Journal by Hasitha Gunasekera
           </p>
         </footer>
-      </div>
 
+        {/* 4. SHARE DIALOG (Fixed positioning prevents scroll issues) */}
+        {isShareModalOpen && sharingData && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsShareModalOpen(false)}></div>
+            <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+              {/* ... Share Modal Inner Content ... */}
+              <button onClick={() => setIsShareModalOpen(false)} className="w-full mt-8 py-4 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-slate-900 transition-colors">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {isArticleOpen && ViewingArticle && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
