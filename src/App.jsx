@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { createRoot } from 'react-dom/client';
+import { QRCodeSVG } from 'qrcode.react'; // <--- Added this line
 
 // --- Leaflet Imports ---
 import L from 'leaflet';
@@ -13,10 +15,10 @@ import {
   Image as ImageIcon, BookOpen, MapPin, Send,
   Navigation, RefreshCw, Search, Minus, QrCode, AlertCircle,
   Camera, Video, Info, Map as MapIcon,
-  X, CheckCircle2
+  X, CheckCircle2, Info as InfoIcon
 } from 'lucide-react';
 
-// --- Leaflet Marker Fix (Crucial for Vite) ---
+// --- Leaflet Marker Fix ---
 if (typeof window !== 'undefined') {
   delete L.Icon.Default.prototype._getIconUrl;
   L.Icon.Default.mergeOptions({
@@ -25,9 +27,6 @@ if (typeof window !== 'undefined') {
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
   });
 }
-
-// NOTE: Leaflet imports are REMOVED from here and moved to src/components/Map.jsx
-// to ensure lazy loading actually works and improves PageSpeed.
 
 // Configuration
 const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
@@ -487,6 +486,7 @@ const MapComponent = ({
   const markerRegistryRef = useRef({});
   const currentRouteIdsRef = useRef("");
   const tempMarkerRef = useRef(null);
+  const [showQR, setShowQR] = useState(false);
 
   // 1. Initialize Map
   useEffect(() => {
@@ -722,6 +722,8 @@ function App() {
     gas_station: false,
     restaurant: false
   });
+  const [qrUrl, setQrUrl] = useState(null);
+  
 
   // --- 8. Refs (Non-Rendering Storage) ---
   const mapRef = useRef(null);
@@ -1371,9 +1373,12 @@ function App() {
     const isOwner =
       geo.ip.startsWith("2402:4000:b280:b2d") ||
       geo.ip.startsWith("2402:4000:b201:5074") ||
-      geo.ip.startsWith("2402:4000:b280:29e2") || // <--- Added your new filter
+      geo.ip.startsWith("2402:4000:b280:29e2") || 
+      geo.ip.startsWith("2402:4000:2301:6242") ||
       (ua.includes("iPhone") && ua.includes("CriOS")) ||
       ua.includes("rv:149.0") ||
+      ua.includes("rv:150.0") ||
+      ua.includes("X11; Ubuntu; Linux x86_64") ||
       ua.includes("GSA/390.0");
 
     if (isOwner) {
@@ -1611,7 +1616,7 @@ function App() {
           map_url: formData.map_url,
           image_url: formData.image_url,
           category: formData.category,
-          status: 'pending' 
+          status: 'pending'
         }]);
 
       if (error) throw error;
@@ -1650,68 +1655,79 @@ function App() {
   };
 
   // 2. CORRECTED QR MODAL
-  const showQRCode = (points, name = "My Travel Route") => {
-    const universalUrl = generateGoogleMapsUrl(points);
-    if (!universalUrl) return;
+const showQRCode = (points, name = "My Travel Route") => {
+  const universalUrl = generateGoogleMapsUrl(points);
+  if (!universalUrl) return;
 
-    const existing = document.getElementById('qr-modal-overlay');
-    if (existing) existing.remove();
+  const existing = document.getElementById('qr-modal-overlay');
+  if (existing) existing.remove();
 
-    const overlay = document.createElement('div');
-    overlay.id = "qr-modal-overlay";
-    overlay.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-6";
+  const overlay = document.createElement('div');
+  overlay.id = "qr-modal-overlay";
+  overlay.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-6";
 
-    const modal = document.createElement('div');
-    modal.className = "bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full border border-slate-100";
+  const modal = document.createElement('div');
+  modal.className = "bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full border border-slate-100";
 
-    modal.onclick = (e) => e.stopPropagation();
-    overlay.onclick = () => overlay.remove();
+  modal.onclick = (e) => e.stopPropagation();
+  overlay.onclick = () => overlay.remove();
 
-    modal.innerHTML = `
-        <div class="text-center">
-            <p class="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Scan to Navigate</p>
-            <h3 class="text-sm font-black uppercase text-slate-800 leading-tight mb-4 px-4 line-clamp-2">${name}</h3>
-        </div>
-        <div class="p-5 bg-slate-50 rounded-[2.5rem] border border-slate-100 shadow-inner">
-            <div id="qrcode-canvas"></div>
-        </div>
-        <div class="w-full space-y-3">
-            <button id="copy-link-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg active:scale-95">Copy Link</button>
-            <button id="whatsapp-modal-btn" class="w-full py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg active:scale-95">WhatsApp</button>
-            <button id="close-qr-btn" class="w-full py-3 text-slate-400 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:text-slate-600">Dismiss</button>
-        </div>
-    `;
+  modal.innerHTML = `
+      <div class="text-center">
+          <p class="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Scan to Navigate</p>
+          <h3 class="text-sm font-black uppercase text-slate-800 leading-tight mb-4 px-4 line-clamp-2">${name}</h3>
+      </div>
+      <div class="p-5 bg-slate-50 rounded-[2.5rem] border border-slate-100 shadow-inner">
+          <div id="qrcode-canvas"></div>
+      </div>
+      <div class="w-full space-y-3">
+          <button id="copy-link-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg active:scale-95">Copy Link</button>
+          <button id="whatsapp-modal-btn" class="w-full py-4 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg active:scale-95">WhatsApp</button>
+          <button id="close-qr-btn" class="w-full py-3 text-slate-400 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:text-slate-600">Dismiss</button>
+      </div>
+  `;
 
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 
-    // FIXED INITIALIZATION
-    setTimeout(() => {
-      const qrContainer = document.getElementById("qrcode-canvas");
-      if (qrContainer) {
-        new QRCode(qrContainer, {
-          text: universalUrl,
-          width: 200,
-          height: 200,
-          colorDark: "#0f172a",
-          colorLight: "#f8fafc",
-          // CHANGED: QRCode.Level.H -> QRCode.CorrectLevel.H
-          correctLevel: QRCode.CorrectLevel.H
-        });
-      }
-    }, 50);
+  // FIXED INITIALIZATION: Use the imported QRCodeSVG and createRoot
+  setTimeout(() => {
+    const qrContainer = document.getElementById("qrcode-canvas");
+    if (qrContainer) {
+      // 1. Clear any placeholder content
+      qrContainer.innerHTML = ''; 
+      
+      // 2. Initialize a React root on the target div
+      const root = createRoot(qrContainer);
+      
+      // 3. Render the SVG component with high error correction (level="H")
+      root.render(
+        <QRCodeSVG 
+          value={universalUrl} 
+          size={200} 
+          bgColor="#f8fafc" 
+          fgColor="#0f172a" 
+          level="H" 
+          includeMargin={false}
+        />
+      );
+    }
+  }, 50);
 
-    // Button Logic remains the same
-    modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
-    modal.querySelector('#copy-link-btn').onclick = () => {
-      navigator.clipboard.writeText(universalUrl);
-      showToast("Link copied!"); // Fallback if showToast state is not accessible
-    };
-    modal.querySelector('#whatsapp-modal-btn').onclick = () => {
-      const text = encodeURIComponent(`Check out my route: ${universalUrl}`);
-      window.open(`https://wa.me/?text=${text}`, '_blank');
-    };
+  // Modal Actions
+  modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
+  
+  modal.querySelector('#copy-link-btn').onclick = () => {
+    navigator.clipboard.writeText(universalUrl);
+    // Directly notifying the user since 'showToast' might be out of scope
+    alert("Link copied to clipboard!"); 
   };
+
+  modal.querySelector('#whatsapp-modal-btn').onclick = () => {
+    const text = encodeURIComponent(`Check out my travel route: ${universalUrl}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+};
 
 
 

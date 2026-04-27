@@ -15,6 +15,7 @@
     "leaflet-routing-machine": "^3.2.12",
     "lucide-react": "^1.9.0",
     "qrcode.js": "^0.0.1",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-leaflet": "^5.0.0"
