@@ -723,7 +723,7 @@ function App() {
     restaurant: false
   });
   const [qrUrl, setQrUrl] = useState(null);
-  
+
 
   // --- 8. Refs (Non-Rendering Storage) ---
   const mapRef = useRef(null);
@@ -1368,22 +1368,15 @@ function App() {
       return;
     }
 
-    // 4. Owner Exclusion Logic (Including your new IPv6 filter)
-    const ua = navigator.userAgent;
-    const isOwner =
-      geo.ip.startsWith("2402:4000:b280:b2d") ||
-      geo.ip.startsWith("2402:4000:b201:5074") ||
-      geo.ip.startsWith("2402:4000:b280:29e2") || 
-      geo.ip.startsWith("2402:4000:2301:6242") ||
-      (ua.includes("iPhone") && ua.includes("CriOS")) ||
-      ua.includes("rv:149.0") ||
-      ua.includes("rv:150.0") ||
-      ua.includes("X11; Ubuntu; Linux x86_64") ||
-      ua.includes("GSA/390.0");
+    const ownerToken = localStorage.getItem('owner_auth_token');
 
-    if (isOwner) {
+    const SECRET_KEY = 'owner';
 
+    if (ownerToken === SECRET_KEY) {
+
+      console.log("Owner session detected. Skipping analytics.");
       return;
+
     }
 
     // 5. Submit to Database
@@ -1655,24 +1648,24 @@ function App() {
   };
 
   // 2. CORRECTED QR MODAL
-const showQRCode = (points, name = "My Travel Route") => {
-  const universalUrl = generateGoogleMapsUrl(points);
-  if (!universalUrl) return;
+  const showQRCode = (points, name = "My Travel Route") => {
+    const universalUrl = generateGoogleMapsUrl(points);
+    if (!universalUrl) return;
 
-  const existing = document.getElementById('qr-modal-overlay');
-  if (existing) existing.remove();
+    const existing = document.getElementById('qr-modal-overlay');
+    if (existing) existing.remove();
 
-  const overlay = document.createElement('div');
-  overlay.id = "qr-modal-overlay";
-  overlay.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-6";
+    const overlay = document.createElement('div');
+    overlay.id = "qr-modal-overlay";
+    overlay.className = "fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-6";
 
-  const modal = document.createElement('div');
-  modal.className = "bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full border border-slate-100";
+    const modal = document.createElement('div');
+    modal.className = "bg-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full border border-slate-100";
 
-  modal.onclick = (e) => e.stopPropagation();
-  overlay.onclick = () => overlay.remove();
+    modal.onclick = (e) => e.stopPropagation();
+    overlay.onclick = () => overlay.remove();
 
-  modal.innerHTML = `
+    modal.innerHTML = `
       <div class="text-center">
           <p class="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-1">Scan to Navigate</p>
           <h3 class="text-sm font-black uppercase text-slate-800 leading-tight mb-4 px-4 line-clamp-2">${name}</h3>
@@ -1687,47 +1680,47 @@ const showQRCode = (points, name = "My Travel Route") => {
       </div>
   `;
 
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
 
-  // FIXED INITIALIZATION: Use the imported QRCodeSVG and createRoot
-  setTimeout(() => {
-    const qrContainer = document.getElementById("qrcode-canvas");
-    if (qrContainer) {
-      // 1. Clear any placeholder content
-      qrContainer.innerHTML = ''; 
-      
-      // 2. Initialize a React root on the target div
-      const root = createRoot(qrContainer);
-      
-      // 3. Render the SVG component with high error correction (level="H")
-      root.render(
-        <QRCodeSVG 
-          value={universalUrl} 
-          size={200} 
-          bgColor="#f8fafc" 
-          fgColor="#0f172a" 
-          level="H" 
-          includeMargin={false}
-        />
-      );
-    }
-  }, 50);
+    // FIXED INITIALIZATION: Use the imported QRCodeSVG and createRoot
+    setTimeout(() => {
+      const qrContainer = document.getElementById("qrcode-canvas");
+      if (qrContainer) {
+        // 1. Clear any placeholder content
+        qrContainer.innerHTML = '';
 
-  // Modal Actions
-  modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
-  
-  modal.querySelector('#copy-link-btn').onclick = () => {
-    navigator.clipboard.writeText(universalUrl);
-    // Directly notifying the user since 'showToast' might be out of scope
-    alert("Link copied to clipboard!"); 
+        // 2. Initialize a React root on the target div
+        const root = createRoot(qrContainer);
+
+        // 3. Render the SVG component with high error correction (level="H")
+        root.render(
+          <QRCodeSVG
+            value={universalUrl}
+            size={200}
+            bgColor="#f8fafc"
+            fgColor="#0f172a"
+            level="H"
+            includeMargin={false}
+          />
+        );
+      }
+    }, 50);
+
+    // Modal Actions
+    modal.querySelector('#close-qr-btn').onclick = () => overlay.remove();
+
+    modal.querySelector('#copy-link-btn').onclick = () => {
+      navigator.clipboard.writeText(universalUrl);
+      // Directly notifying the user since 'showToast' might be out of scope
+      alert("Link copied to clipboard!");
+    };
+
+    modal.querySelector('#whatsapp-modal-btn').onclick = () => {
+      const text = encodeURIComponent(`Check out my travel route: ${universalUrl}`);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+    };
   };
-
-  modal.querySelector('#whatsapp-modal-btn').onclick = () => {
-    const text = encodeURIComponent(`Check out my travel route: ${universalUrl}`);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
-  };
-};
 
 
 
