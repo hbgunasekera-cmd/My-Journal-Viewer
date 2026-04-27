@@ -74,27 +74,30 @@ const RenderDynamicIcon = ({ iconName, className }) => {
   return <IconComponent className={className} />;
 };
 
-// 1. Updated Helper Function to handle Fallback/Home logic
 const updateSEO = (place) => {
-  // Define default values for Homepage
+  // Default values for Homepage
   const defaultTitle = "My Journal";
   const defaultDesc = "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations.";
-  const defaultImg = "https://your-domain.com/default-logo.png"; // Replace with your actual logo URL
+  const defaultImg = "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png";
 
-  // Determine content based on whether a place exists (Article vs Home)
-  const title = place ? `${place.place_name} | My Journal` : defaultTitle;
-  const description = place?.ai_article?.story 
-    ? place.ai_article.story.substring(0, 150) + "..." 
+  // Logic to determine values - prevents "undefined" by checking for place_name
+  const isArticle = place && place.place_name;
+  const title = isArticle ? `${place.place_name} | My Journal` : defaultTitle;
+  
+  const description = isArticle 
+    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description) 
     : defaultDesc;
-  const imageUrl = place?.cover_photo_url || defaultImg;
-  const shareUrl = place 
+    
+  const imageUrl = isArticle ? place.cover_photo_url : defaultImg;
+  
+  const shareUrl = isArticle 
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
 
-  // Update Browser Tab Title
+  // Update the Browser Tab Title
   document.title = title;
 
-  // Update Meta Tags for Crawlers (Facebook/WhatsApp/X)
+  // Update Meta Tags for social crawlers
   const metaTags = {
     'og:title': title,
     'og:description': description,
@@ -107,18 +110,17 @@ const updateSEO = (place) => {
   };
 
   Object.entries(metaTags).forEach(([prop, content]) => {
-    let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
+    let el = document.querySelector(`meta[property="${prop}"]`) || 
+             document.querySelector(`meta[name="${prop}"]`);
     if (!el) {
       el = document.createElement('meta');
       if (prop.startsWith('og:')) el.setAttribute('property', prop);
       else el.setAttribute('name', prop);
       document.head.appendChild(el);
     }
-    el.setAttribute('content', content);
+    el.setAttribute('content', content || "");
   });
 };
-
-
 
 
 const MapSelectionComponent = React.memo(({ onLocationSelect, initialCoords, onMapReady }) => {
@@ -807,7 +809,7 @@ function App() {
     }
   }, [places]);
 
-  useEffect(() => {
+ useEffect(() => {
   
   updateSEO(ViewingArticle);
 
@@ -1386,9 +1388,9 @@ function App() {
           text: `Check out this amazing spot on My Journal: ${place.place_name}`,
           url: url
         });
-        return; 
+        return;
       } catch (err) {
-        return; 
+        return;
       }
     }
 
