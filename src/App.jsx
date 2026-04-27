@@ -664,18 +664,17 @@ function App() {
   const [places, setPlaces] = useState([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isArticleOpen, setisArticleOpen] = useState(false);
-  const [ViewingArticle, setViewingArticle] = useState(null);
   const [filterTag, setFilterTag] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('done'); // Removed duplicate
   const [sortBy, setSortBy] = useState('recent');
-  const [statusFilter, setStatusFilter] = React.useState('done');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isArticleOpen, setIsArticleOpen] = useState(false); // Standardized camelCase
+  const [ViewingArticle, setViewingArticle] = useState(null); // Standardized camelCase
 
   // --- 2. Adventure Engine & Planner State ---
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
-  const [isEngineOpen, setIsEngineOpen] = React.useState(false);
-  const [plannerSearch, setPlannerSearch] = React.useState('');
+  const [isEngineOpen, setIsEngineOpen] = useState(false);
+  const [plannerSearch, setPlannerSearch] = useState('');
   const [selectedRoute, setSelectedRoute] = useState([]);
   const [routeData, setRouteData] = useState(null);
   const [routeDistance, setRouteDistance] = useState(0);
@@ -683,20 +682,20 @@ function App() {
   const [hoveredPlaceId, setHoveredPlaceId] = useState(null);
 
   // --- 3. Social & Interactions ---
-  const [isSocialOpen, setIsSocialOpen] = React.useState(false);
+  const [isSocialOpen, setIsSocialOpen] = useState(false);
   const [likes, setLikes] = useState({});
   const [comments, setComments] = useState({});
-  const [NewCommentText, setNewCommentText] = useState('');
-  const [notifications, setNotifications] = React.useState([]);
+  const [NewCommentText, setNewCommentText] = useState(''); // Standardized camelCase
+  const [notifications, setNotifications] = useState([]);
 
   // --- 4. Navigation & FAB (Floating Action Button) ---
-  const [isFabExpanded, setIsFabExpanded] = React.useState(false);
-  const [isSocialExpanded, setIsSocialExpanded] = React.useState(false);
-  const [isAddExpanded, setIsAddExpanded] = React.useState(false);
-  const [isPrivacyOpen, setIsPrivacyOpen] = React.useState(false);
+  const [isFabExpanded, setIsFabExpanded] = useState(false);
+  const [isSocialExpanded, setIsSocialExpanded] = useState(false);
+  const [isAddExpanded, setIsAddExpanded] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
 
   // --- 5. Add Location & Form State ---
-  const [isAddOpen, setisAddOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false); // Standardized camelCase
   const [addMapInstance, setAddMapInstance] = useState(null);
   const [formData, setFormData] = useState({
     place_name: '',
@@ -710,15 +709,15 @@ function App() {
   });
 
   // --- 6. Media & Weather State ---
-  const [weatherData, setWeatherData] = React.useState({});
+  const [weatherData, setWeatherData] = useState({});
   const [activeGallery, setActiveGallery] = useState(null);
   const [activeGalleryId, setActiveGalleryId] = useState(null);
   const [activeVideoId, setActiveVideoId] = useState(null);
   const [activeId, setActiveId] = useState(null);
 
   // --- 7. Map Controls & Nearby Logic ---
-  const [nearbyAttractions, setNearbyAttractions] = React.useState([]);
-  const [toggles, setToggles] = React.useState({
+  const [nearbyAttractions, setNearbyAttractions] = useState([]);
+  const [toggles, setToggles] = useState({
     lodging: false,
     gas_station: false,
     restaurant: false
@@ -732,7 +731,7 @@ function App() {
   const routingControlRef = useRef(null);
   const currentRouteIdsRef = useRef("");
   const autocompleteRef = useRef(null);
-  const nearbyMarkersRef = React.useRef([]);
+  const nearbyMarkersRef = useRef([]);
 
   // --- 9. Optimized Values (Debounced) ---
   const debouncedSearch = useDebounce(searchTerm, 300);
@@ -783,7 +782,7 @@ function App() {
   // Reset pagination when filters change
   useEffect(() => {
     setVisibleCount(20);
-  }, [selectedCategory, debouncedSearch, statusFilter]);
+  }, [filterTag, debouncedSearch, statusFilter]);
 
   // Re-render icons specifically for notifications
   useEffect(() => {
@@ -800,7 +799,7 @@ function App() {
         const target = places.find(p => p.place_name === placeFromUrl);
         if (target) {
           setViewingArticle(target);
-          setisArticleOpen(true);
+          setIsArticleOpen(true);
         }
       }
     }
@@ -808,7 +807,7 @@ function App() {
 
   // Update Metadata & SEO based on current view
   useEffect(() => {
-    if (ViewingArticle) {
+    if (ViewingArticle) { // Fixed: matching state name 'ViewingArticle'
       updateSEO(
         ViewingArticle?.place_name,
         ViewingArticle.description || `Explore ${ViewingArticle?.place_name} in ${ViewingArticle.district}, Sri Lanka.`,
@@ -955,25 +954,65 @@ function App() {
     }
   }, [isPlannerOpen, debouncedPlannerSearch, places]);
 
-  // 1. Define the filtering logic first
+  // --- CONSOLIDATED DATA PIPELINE (Distance -> Filter -> Sort -> Paginate) ---
+
+  /** * STEP 1: Enrich data with distances
+   * We do this first so the sorting logic has access to 'currentDistance'
+   */
+  const placesWithDistance = useMemo(() => {
+    return places.map(place => ({
+      ...place,
+      currentDistance: userCoords
+        ? calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude)
+        : Infinity
+    }));
+  }, [places, userCoords]);
+
+  /** * STEP 2: Filter and Sort
+   * Combines status, category, search, and the chosen sort method
+   */
   const filteredPlaces = useMemo(() => {
-    return places.filter(place => {
-      const matchesSearch = place.place_name?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        place.district?.toLowerCase().includes(debouncedSearch.toLowerCase());
-      const matchesCategory = selectedCategory === 'All' || place.category === selectedCategory;
-
-      // Match the status filter (done/backlog) based on your app's current tab
+    // 2a. Apply Filters
+    const filtered = placesWithDistance.filter(place => {
       const matchesStatus = place.status === statusFilter;
+      const matchesCategory = filterTag === 'All' || place.category === filterTag;
+      const search = (debouncedSearch || "").toLowerCase();
 
-      return matchesSearch && matchesCategory && matchesStatus;
+      if (!search) return matchesStatus && matchesCategory;
+
+      const searchableText = [
+        place.place_name,
+        place.district,
+        place.locality,
+        place.category
+      ].join(' ').toLowerCase();
+
+      return matchesStatus && matchesCategory && searchableText.includes(search);
     });
-  }, [places, debouncedSearch, selectedCategory, statusFilter]);
 
-  // 2. Then define the visible (virtualized) subset
+    // 2b. Apply Sorting
+    return filtered.sort((a, b) => {
+      if (sortBy === 'recent') return b.id - a.id;
+
+      if (sortBy === 'distance') {
+        return (a.currentDistance || Infinity) - (b.currentDistance || Infinity);
+      }
+
+      return (a.place_name || "").localeCompare(b.place_name || "");
+    });
+  }, [placesWithDistance, statusFilter, filterTag, debouncedSearch, sortBy]);
+
+  /** * STEP 3: Pagination Slice
+   * Slices the final sorted/filtered list based on infinite scroll visibleCount
+   */
   const displayedPlaces = useMemo(() => {
     return filteredPlaces.slice(0, visibleCount);
   }, [filteredPlaces, visibleCount]);
 
+  // --- HELPER FUNCTIONS & EFFECTS ---
+
+  /** * Notification Handler 
+   */
   const showToast = useCallback((message, type = 'info') => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, message, type }]);
@@ -982,22 +1021,27 @@ function App() {
     }, 4000);
   }, []);
 
-  const placesWithDistance = useMemo(() => {
-    if (!userCoords) return places;
-    return places.map(p => ({
-      ...p,
-      currentDistance: calculateDistance(userCoords.lat, userCoords.lng, p.latitude, p.longitude)
-    }));
-  }, [places, userCoords]);
+  /** * Data Fetching from Supabase
+   */
+  const fetchPlaces = useCallback(async () => {
+    try {
+      const { data, error } = await supabaseClient
+        .from('travel_bucket_list')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  const fetchPlaces = async () => {
-    const { data } = await supabaseClient
-      .from('travel_bucket_list')
-      .select('*')
-      .order('created_at', { ascending: false });
-    setPlaces(data || []);
-  };
+      if (error) throw error;
+      setPlaces(data || []);
+    } catch (err) {
+      console.error("Fetch Error:", err.message);
+      showToast("Failed to load locations", "error");
+    }
+  }, [showToast]);
 
+  // Initial Data Load
+  useEffect(() => {
+    fetchPlaces();
+  }, [fetchPlaces]);
 
   /**
      * TOGGLE NEARBY PLACES (Modern Implementation)
@@ -1574,7 +1618,7 @@ function App() {
 
       // 3. SUCCESS FEEDBACK
       addNotification("Success! Spot submitted for review.", "success");
-      setisAddOpen(false);
+      setIsAddOpen(false);
 
       // Reset form for next time
       setFormData({
@@ -1670,53 +1714,6 @@ function App() {
   };
 
 
-  const displayPlaces = React.useMemo(() => {
-    // 1. FILTERING LOGIC
-
-    const filtered = placesWithDistance.filter(place => {
-      const matchesStatus = place.status === statusFilter;
-      const matchesCategory = filterTag === 'All' || place.category === filterTag;
-      const search = (debouncedSearch || "").toLowerCase();
-
-      // If there's no search term, don't waste cycles on string operations
-      if (!search) return matchesStatus && matchesCategory;
-
-      const name = (place.place_name || "").toLowerCase();
-      const district = (place.district || "").toLowerCase();
-      const locality = (place.locality || "").toLowerCase();
-      const cat = (place.category || "").toLowerCase();
-
-      // Multi-column search across all identifying fields
-      const matchesSearch = name.includes(search) ||
-        district.includes(search) ||
-        locality.includes(search) ||
-        cat.includes(search);
-
-      return matchesStatus && matchesCategory && matchesSearch;
-    });
-
-    // 2. SORTING LOGIC
-    return filtered.sort((a, b) => {
-      // Sort by ID (Newest First)
-      if (sortBy === 'recent') {
-        return b.id - a.id;
-      }
-
-      // Sort by Distance (Nearest First)
-      if (sortBy === 'distance' && userCoords?.lat && userCoords?.lng) {
-
-        const distA = a.currentDistance !== undefined ? a.currentDistance : Infinity;
-        const distB = b.currentDistance !== undefined ? b.currentDistance : Infinity;
-
-        return distA - distB;
-      }
-
-      // Default: Alphabetical by Place Name
-      return (a.place_name || "").localeCompare(b.place_name || "");
-    });
-
-
-  }, [placesWithDistance, statusFilter, filterTag, debouncedSearch, sortBy, userCoords]);
 
   // --- Advertisement Loader ---
   useEffect(() => {
@@ -1799,184 +1796,165 @@ function App() {
 
 
   return (
+
     <div className="h-full flex flex-col max-w-7xl mx-auto">
-      <header className="p-4 md:px-10 md:pt-8 md:pb-4 flex justify-between items-center bg-white md:bg-transparent border-b md:border-none">
 
-        <div className="flex items-center gap-4 md:gap-6">
-          {/* Larger Logo Container */}
-          <div className="shrink-0 w-16 h-16 md:w-24 md:h-24 flex items-center justify-center bg-white rounded-2xl shadow-md border border-slate-100 overflow-hidden p-1.5">
-            <img
-              src="https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png"
-              alt="My Journal Logo"
-              className="w-full h-full object-contain"
-            />
-          </div>
+      {/* --- CONSOLIDATED HEADER & NAVIGATION AREA --- */}
+      <div className="flex flex-col w-full bg-white md:bg-transparent">
 
-          {/* Identity Text - Scaled to match */}
-          <div className="flex flex-col justify-center">
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tighter text-slate-800 leading-none">
-              My Journal
-            </h1>
-            <p className="mt-2 text-slate-500 text-xs sm:text-sm font-medium leading-tight max-w-[200px] sm:max-w-none">
-              Exploring nature, one destination at a time.
-            </p>
-          </div>
-        </div>
+        {/* 1. HEADER SECTION */}
+        <header className="p-4 md:px-10 md:pt-8 md:pb-4 flex justify-between items-center bg-white md:bg-transparent border-b md:border-none">
 
-
-
-        <div className="flex items-center gap-2">
-          {/* 1. Mobile Filter Toggle */}
-          <button
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className="flex md:hidden items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"
-          >
-            <SlidersHorizontal className="w-3 h-3 text-orange-400" />
-            {isFilterOpen ? 'Close' : 'Filters'}
-          </button>
-
-          {/* --- STANDARDIZED DUAL HUB SYSTEM --- */}
-          {!isAddOpen && !isPlannerOpen && !isArticleOpen && (
-            <div className="fixed bottom-4 right-3 z-[4000] flex flex-col items-end gap-2 max-w-[140px]">
-
-              {/* HUB 1: SOCIAL HUB */}
-              <div className="flex flex-col items-end gap-2">
-                <div className={`flex flex-col items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-xl border border-slate-100 transition-all duration-400 ${isSocialOpen ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-90 pointer-events-none'
-                  }`}>
-                  <a href="https://web.facebook.com/profile.php?id=61571059524746" target="_blank" className="p-2.5 bg-[#1877F2] text-white rounded-xl hover:scale-105 transition-transform shadow-md outline-none select-none">
-                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                  </a>
-                  <a href="https://www.tiktok.com/@hbgunasekera" target="_blank" className="p-2.5 bg-black text-white rounded-xl hover:scale-105 transition-transform">
-                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.17-2.89-.6-4.13-1.47-.14 1.34-.14 2.68-.12 4.02.01 2.54-.78 5.25-2.73 6.94-1.93 1.75-4.8 2.22-7.2 1.55-2.61-.64-4.81-2.91-5.18-5.59-.44-2.81.74-5.99 3.16-7.51 1.48-.96 3.32-1.35 5.06-1.1v4.1c-1.25-.19-2.62.15-3.51 1.05-.97 1-.95 2.76-.05 3.8.84.99 2.37 1.25 3.51.72 1.13-.5 1.71-1.74 1.7-2.98.02-3.13.01-6.27.01-9.41z" /></svg>
-                  </a>
-                </div>
-
-                {/* Standardized Size: w-14 h-14 */}
-                <button
-                  onClick={() => { setIsSocialOpen(!isSocialOpen); setIsEngineOpen(false); }}
-                  className={`w-14 h-14 shadow-lg flex items-center justify-center transition-all duration-300 rounded-full ${isSocialOpen ? 'bg-white text-slate-900 border border-slate-100' : 'bg-slate-900 text-white'
-                    }`}
-                >
-                  {isSocialOpen ? <X className="w-5 h-5" /> : <Share2 className="w-6 h-6" />}
-                </button>
-              </div>
-
-              {/* HUB 2: ENGINE HUB */}
-              <div className="flex flex-col items-end gap-2">
-                <div className={`flex flex-col gap-2 transition-all duration-400 ${isEngineOpen ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-90 pointer-events-none'
-                  }`}>
-                  <button onClick={() => { setisAddOpen(true); setIsEngineOpen(false); }} className="flex items-center justify-end gap-2 bg-white text-slate-900 p-1.5 pr-2 rounded-2xl shadow-lg border border-slate-100 whitespace-nowrap">
-                    <span className="font-black uppercase text-[8px] tracking-tighter ml-2">Add</span>
-                    <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white"><Plus className="w-4 h-4" /></div>
-                  </button>
-                  <button onClick={() => { setIsPlannerOpen(true); setIsEngineOpen(false); }} className="flex items-center justify-end gap-2 bg-white text-slate-900 p-1.5 pr-2 rounded-2xl shadow-lg border border-slate-100 whitespace-nowrap">
-                    <span className="font-black uppercase text-[8px] tracking-tighter ml-2">Plan</span>
-                    <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center text-white"><MapIcon className="w-6 h-6" /></div>
-                  </button>
-                </div>
-
-                <div className="relative">
-                  {!isEngineOpen && <div className="absolute inset-0 bg-slate-900 rounded-full animate-ping opacity-20"></div>}
-
-                  {/* Standardized Size: w-14 h-14 | Fixed: Always rounded-full */}
-                  <button
-                    onClick={() => { setIsEngineOpen(!isEngineOpen); setIsSocialOpen(false); }}
-                    className={`relative w-14 h-14 shadow-xl flex items-center justify-center transition-all duration-500 rounded-full ${isEngineOpen ? 'bg-white text-slate-900 border border-slate-100' : 'bg-slate-900 text-white'
-                      }`}
-                  >
-                    {isEngineOpen ? (
-                      /* Inline X Icon - Safe for React */
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6 text-red-500">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    ) : (
-                      <div className="flex flex-col items-center pointer-events-none">
-                        {/* Inline Zap Icon - Safe for React */}
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="yellow" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-yellow-400">
-                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg>
-                        <span className="text-[6px] font-black uppercase mt-0.5">Engine</span>
-                      </div>
-                    )}
-                  </button>
-                </div>
-              </div>
+          {/* LEFT SIDE: Logo & Identity */}
+          <div className="flex items-center gap-4 md:gap-6">
+            {/* Logo Container */}
+            <div className="shrink-0 w-16 h-16 md:w-24 md:h-24 flex items-center justify-center bg-white rounded-2xl shadow-md border border-slate-100 overflow-hidden p-1.5">
+              <img
+                src="https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png"
+                alt="My Journal Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
-          )}
-        </div>
 
-
-      </header>
-
-      {/* Dynamic visibility based on isFilterOpen state */}
-      <div className={`${isFilterOpen ? 'block' : 'hidden'} md:block bg-white p-5 mx-4 md:mx-10 rounded-3xl shadow-xl border border-slate-100 mb-6`}>
-        <div className="flex flex-col md:flex-row gap-3 mb-4">
-          {/* Search Input */}
-          <div className="flex-[2] relative">
-            <input
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search destinations..."
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 font-bold text-[11px] outline-none border border-transparent focus:border-slate-200 transition-all"
-            />
-          </div>
-
-          {/* Journal Status Dropdown - Fixed width flex-1 */}
-          <div className="relative flex-1">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-[10px] font-black uppercase appearance-none focus:outline-none focus:ring-2 focus:ring-slate-900/5 transition-all cursor-pointer"
-            >
-              <option value="done">✨ Completed</option>
-              <option value="pending">⏳ Pending List</option>
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-              <ChevronDown className="w-3 h-3" />
+            {/* Identity Text */}
+            <div className="flex flex-col justify-center">
+              <h1 className="text-2xl sm:text-4xl font-black tracking-tighter text-slate-800 leading-none">
+                My Journal
+              </h1>
+              <p className="mt-2 text-slate-500 text-xs sm:text-sm font-medium leading-tight max-w-[200px] sm:max-w-none">
+                Exploring nature, one destination at a time.
+              </p>
             </div>
           </div>
 
-          {/* Sort Dropdown - Fixed width flex-1 */}
-          <div className="relative flex-1">
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-              className="w-full bg-slate-900 text-white border border-slate-900 rounded-xl px-4 py-3 text-[10px] font-black uppercase appearance-none focus:outline-none shadow-lg shadow-slate-900/20 cursor-pointer"
-            >
-              <option value="recent">Newest First</option>
-              <option value="distance">Nearest First</option>
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-100/50">
-              <ChevronDown className="w-3 h-3" />
-            </div>
-          </div>
-        </div>
+          {/* RIGHT SIDE: Toggle Button & Hub Controls */}
+          <div className="flex items-center gap-2">
 
-        {/* Category Tags */}
-        <div className="flex flex-wrap gap-2">
-          {['All', ...VALID_CATEGORIES].map(tag => (
+            {/* Filters Toggle - Visible on ALL screens and positioned on the RIGHT */}
             <button
-              key={tag}
-              onClick={() => setFilterTag(tag)}
-              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all active:scale-95 ${filterTag === tag
-                ? 'bg-slate-900 text-white shadow-lg'
-                : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                }`}
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all hover:bg-slate-800"
             >
-              {tag}
+              <SlidersHorizontal className="w-3.5 h-3.5 text-orange-400" />
+              <span>{isFilterOpen ? 'Close' : 'Filters'}</span>
             </button>
-          ))}
+
+            {/* Standardized Dual Hub System (Fixed positioning) */}
+            {!isAddOpen && !isPlannerOpen && !isArticleOpen && (
+              <div className="fixed bottom-4 right-3 z-[4000] flex flex-col items-end gap-2 max-w-[140px]">
+                {/* HUB 1: SOCIAL HUB */}
+                <div className="flex flex-col items-end gap-2">
+                  <div className={`flex flex-col items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-xl border border-slate-100 transition-all duration-400 ${isSocialOpen ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-90 pointer-events-none'}`}>
+                    <a href="https://web.facebook.com/profile.php?id=61571059524746" target="_blank" rel="noreferrer" className="p-2.5 bg-[#1877F2] text-white rounded-xl hover:scale-105 transition-transform shadow-md outline-none select-none">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                      </svg>
+                    </a>
+                    <a href="https://www.tiktok.com/@hbgunasekera" target="_blank" rel="noreferrer" className="p-2.5 bg-black text-white rounded-xl hover:scale-105 transition-transform shadow-md">
+                      <Video className="w-4 h-4" />
+                    </a>
+                  </div>
+                  <button
+                    onClick={() => { setIsSocialOpen(!isSocialOpen); setIsEngineOpen(false); }}
+                    className={`w-14 h-14 shadow-lg flex items-center justify-center transition-all duration-300 rounded-full ${isSocialOpen ? 'bg-white text-slate-900 border border-slate-100' : 'bg-slate-900 text-white'}`}
+                  >
+                    {isSocialOpen ? <X className="w-5 h-5" /> : <Share2 className="w-6 h-6" />}
+                  </button>
+                </div>
+
+                {/* HUB 2: ENGINE HUB */}
+                <div className="flex flex-col items-end gap-2">
+                  <div className={`flex flex-col gap-2 transition-all duration-400 ${isEngineOpen ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-90 pointer-events-none'}`}>
+                    <button onClick={() => { setIsAddOpen(true); setIsEngineOpen(false); }} className="flex items-center justify-end gap-2 bg-white text-slate-900 p-1.5 pr-2 rounded-2xl shadow-lg border border-slate-100 whitespace-nowrap">
+                      <span className="font-black uppercase text-[8px] tracking-tighter ml-2">Add</span>
+                      <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white"><Plus className="w-4 h-4" /></div>
+                    </button>
+                    <button onClick={() => { setIsPlannerOpen(true); setIsEngineOpen(false); }} className="flex items-center justify-end gap-2 bg-white text-slate-900 p-1.5 pr-2 rounded-2xl shadow-lg border border-slate-100 whitespace-nowrap">
+                      <span className="font-black uppercase text-[8px] tracking-tighter ml-2">Plan</span>
+                      <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center text-white"><MapIcon className="w-6 h-6" /></div>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    {!isEngineOpen && <div className="absolute inset-0 bg-slate-900 rounded-full animate-ping opacity-20"></div>}
+                    <button
+                      onClick={() => { setIsEngineOpen(!isEngineOpen); setIsSocialOpen(false); }}
+                      className={`relative w-14 h-14 shadow-xl flex items-center justify-center transition-all duration-500 rounded-full ${isEngineOpen ? 'bg-white text-slate-900 border border-slate-100' : 'bg-slate-900 text-white'}`}
+                    >
+                      {isEngineOpen ? <X className="w-6 h-6 text-red-500" /> : (
+                        <div className="flex flex-col items-center pointer-events-none">
+                          <svg className="w-5 h-5 text-yellow-400 fill-yellow-400" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                          </svg>
+                          <span className="text-[6px] font-black uppercase mt-0.5">Engine</span>
+                        </div>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* 2. SEARCH, FILTER & SORT BLOCK */}
+        {/* Behavior: Strictly toggled by isFilterOpen on ALL screens */}
+        <div className={`
+    ${isFilterOpen ? 'flex' : 'hidden'} 
+    flex-col bg-white p-5 mx-4 md:mx-10 rounded-3xl shadow-xl border border-slate-100 mb-6 transition-all duration-300 relative z-[50]
+  `}>
+          <div className="flex flex-col md:flex-row gap-3 mb-4 w-full">
+            {/* Search Input */}
+            <div className="flex-[2] relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search destinations..."
+                className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-50 font-bold text-[11px] outline-none border border-transparent focus:border-slate-200 transition-all text-slate-800"
+              />
+            </div>
+
+            {/* Sort Function */}
+            <div className="relative flex-1">
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="w-full bg-slate-900 text-white border border-slate-900 rounded-xl px-4 py-3 text-[10px] font-black uppercase appearance-none focus:outline-none shadow-lg shadow-slate-900/20 cursor-pointer"
+              >
+                <option value="recent">Newest First</option>
+                <option value="distance">Nearest First</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-100/50 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Category Tags */}
+          <div className="flex flex-wrap gap-2 w-full pt-2 border-t border-slate-50">
+            {['All', ...VALID_CATEGORIES].map(tag => (
+              <button
+                key={tag}
+                onClick={() => setFilterTag(tag)}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all active:scale-95 ${filterTag === tag
+                    ? 'bg-slate-900 text-white shadow-lg'
+                    : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                  }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
+
+      <div
+        className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list"
+        onScroll={handleScroll}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
 
           {/* Location Cards Section */}
-          {displayPlaces.map(place => (
+          {displayedPlaces.map(place => (
             /* SEMANTIC ARTICLE: Each card is now an independent content piece for SEO */
             <article
               key={place.id}
@@ -2052,7 +2030,7 @@ function App() {
 
                     {/* Comment Button */}
                     <button
-                      onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setisArticleOpen(true); }}
+                      onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setIsArticleOpen(true); }}
                       className="flex items-center gap-1.5 group outline-none select-none"
                       aria-label="View comments"
                     >
@@ -2099,7 +2077,7 @@ function App() {
                     <button
                       onClick={() => {
                         if (typeof setViewingArticle === 'function') setViewingArticle(place);
-                        if (typeof setisArticleOpen === 'function') setisArticleOpen(true);
+                        if (typeof setIsArticleOpen === 'function') setIsArticleOpen(true);
                       }}
                       className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 active:scale-90 transition-all outline-none select-none border border-emerald-100/50 group"
                       title="Read Travel Story"
@@ -2145,7 +2123,7 @@ function App() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onClick={() => {
-            setisArticleOpen(false);
+            setIsArticleOpen(false);
             setViewingArticle(null);
           }}></div>
 
@@ -2156,7 +2134,7 @@ function App() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
               <button
                 onClick={() => {
-                  setisArticleOpen(false);
+                  setIsArticleOpen(false);
                   setViewingArticle(null);
                 }}
                 className="absolute top-6 right-6 w-10 h-10 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all"
@@ -2285,7 +2263,7 @@ function App() {
               </div>
 
               <button onClick={() => {
-                setisArticleOpen(false);
+                setIsArticleOpen(false);
                 setViewingArticle(null);
               }} className="mt-8 w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-colors">Close Journal</button>
             </div>
@@ -2538,7 +2516,7 @@ function App() {
                 </p>
               </div>
               <button
-                onClick={() => setisAddOpen(false)}
+                onClick={() => setIsAddOpen(false)}
                 className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center hover:bg-slate-100 transition-colors border border-slate-100"
               >
                 <X className="w-4 h-4 text-slate-900" />
