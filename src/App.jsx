@@ -922,6 +922,8 @@ function App() {
     if (isAddOpen) {
       let autocompleteInstance = null;
 
+      logVisit('Add Function');
+
       const initAutocomplete = async () => {
         if (!window.google || !window.google.maps) return;
 
@@ -1002,6 +1004,7 @@ function App() {
   // --- 4. PLANNER & WEATHER ENGINE LOGIC ---
   useEffect(() => {
     if (isPlannerOpen && places.length > 0) {
+
       logVisit('Plan Function');
 
       const filteredForWeather = places.filter(place => {
@@ -1489,73 +1492,74 @@ function App() {
 };
 
   const logVisit = async (path = 'Main Page') => {
-    // 1. Environment Check
-    if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
-      return;
-    }
+  // 1. Environment Check
+  if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
+    return;
+  }
 
-    // 2. SECRET URL ACTIVATION
-    // If you visit yoursite.com/?mode=owner, it sets the token automatically
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('mode') === 'owner') {
-      localStorage.setItem('owner_auth_token', 'owner');
-      console.log("Owner mode activated via URL.");
-    }
+  // 2. SECRET URL ACTIVATION
+  // Access via: yoursite.com/?mode=owner
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('mode') === 'owner') {
+    localStorage.setItem('owner_auth_token', 'owner');
+    console.log("Owner mode activated.");
+  }
 
-    // 3. Owner Exclusion Check
-    const ownerToken = localStorage.getItem('owner_auth_token');
-    if (ownerToken === 'owner') {
-      return; // Exit immediately, no logging happens
-    }
+  // 3. Owner Exclusion Check
+  if (localStorage.getItem('owner_auth_token') === 'owner') {
+    return; // Exit: You are invisible to the logs
+  }
 
-    // 4. IMMEDIATE LOCK (For actual visitors)
-    if (path === 'Main Page') {
-      if (sessionStorage.getItem('visit_logged')) return;
-      sessionStorage.setItem('visit_logged', 'true');
-    }
+  // 4. Session Lock for Main Page Only
+  // This allows 'Plan Function' to be logged every time it is clicked,
+  // but prevents 'Main Page' from spamming the DB on refresh.
+  if (path === 'Main Page') {
+    if (sessionStorage.getItem('visit_logged')) return;
+    sessionStorage.setItem('visit_logged', 'true');
+  }
 
-    // 5. Fetch Geographic Data
-    let geo = null;
-    const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
+  // 5. Fetch Geographic Data
+  let geo = null;
+  const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
 
-    for (const url of providers) {
-      try {
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          geo = {
-            ip: data.ip || data.query || data.ipAddress || '',
-            country: data.country_name || data.countryName || data.country || 'Unknown',
-            region: data.region_name || data.stateProv || data.region || 'Unknown',
-            city: data.city || 'Unknown'
-          };
-          break;
-        }
-      } catch (e) { }
-    }
+  for (const url of providers) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        geo = {
+          ip: data.ip || data.query || data.ipAddress || '',
+          country: data.country_name || data.countryName || data.country || 'Unknown',
+          region: data.region_name || data.stateProv || data.region || 'Unknown',
+          city: data.city || 'Unknown'
+        };
+        break;
+      }
+    } catch (e) { /* Silently fail to next provider */ }
+  }
 
-    if (!geo || !geo.ip) {
-      if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
-      return;
-    }
+  if (!geo || !geo.ip) {
+    if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
+    return;
+  }
 
-    // 6. Submit to Database
-    const ua = navigator.userAgent;
-    const { error } = await supabaseClient
-      .from('page_visits')
-      .insert([{
-        page_path: path,
-        user_agent: ua,
-        country: geo.country,
-        region: geo.region,
-        city: geo.city,
-        ip_address: geo.ip
-      }]);
+  // 6. Submit to Database
+  const { error } = await supabaseClient
+    .from('page_visits')
+    .insert([{
+      page_path: path,
+      user_agent: navigator.userAgent,
+      country: geo.country,
+      region: geo.region,
+      city: geo.city,
+      ip_address: geo.ip
+    }]);
 
-    if (error && path === 'Main Page') {
-      sessionStorage.removeItem('visit_logged');
-    }
-  };
+  // 7. Cleanup on Error
+  if (error && path === 'Main Page') {
+    sessionStorage.removeItem('visit_logged');
+  }
+};
 
 
   const getUserLocation = () => {
