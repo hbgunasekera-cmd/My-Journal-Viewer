@@ -115,7 +115,7 @@ const updateSEO = (place) => {
 
   const title = hasPlace ? `${place.place_name} | My Journal` : defaultTitle;
 
-  // Refined Description Logic: AI Story -> Description -> Default
+  // Refined Description Logic
   let description = defaultDesc;
   if (hasPlace) {
     if (place.ai_article?.story) {
@@ -125,10 +125,19 @@ const updateSEO = (place) => {
     }
   }
 
-  // Prioritize high-res cover photos for Facebook/Twitter cards
-  const imageUrl = hasPlace ? (place.cover_photo_url || place.image_url || defaultImg) : defaultImg;
+  // --- URL CLEANING LOGIC ---
+  // Ensure we have a valid absolute URL and encode spaces to %20
+  let rawImageUrl = hasPlace ? (place.cover_photo_url || place.image_url || defaultImg) : defaultImg;
+  
+  // 1. Make sure it's an absolute URL
+  if (rawImageUrl && !rawImageUrl.startsWith('http')) {
+    rawImageUrl = window.location.origin + (rawImageUrl.startsWith('/') ? '' : '/') + rawImageUrl;
+  }
+  
+  // 2. Encode spaces (CRITICAL for Facebook 'Invalid URL' error)
+  const imageUrl = rawImageUrl.replace(/\s/g, '%20');
 
-  // Authoritative URL (Crucial for GSC and Social Sharing)
+  // Authoritative URL
   const shareUrl = hasPlace
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
@@ -140,7 +149,7 @@ const updateSEO = (place) => {
   const metaTags = {
     'og:title': title,
     'og:description': description,
-    'og:image': imageUrl,
+    'og:image': imageUrl, // Now cleaned and encoded
     'og:url': shareUrl,
     'og:type': hasPlace ? 'article' : 'website',
     'twitter:title': title,
@@ -162,7 +171,7 @@ const updateSEO = (place) => {
     el.setAttribute('content', content || "");
   });
 
-  // 5. Canonical Link Logic (Fix for Google Search Console indexing)
+  // 5. Canonical Link Logic
   let canonicalEl = document.querySelector('link[rel="canonical"]');
   if (!canonicalEl) {
     canonicalEl = document.createElement('link');
