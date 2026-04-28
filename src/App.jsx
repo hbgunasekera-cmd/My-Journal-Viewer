@@ -105,14 +105,13 @@ const RenderDynamicIcon = ({ iconName, className }) => {
 };
 
 const updateSEO = (place) => {
-  // 1. Setup Defaults
+  // 1. Setup Defaults (Encoded for immediate crawler compatibility)
   const defaultTitle = "My Journal | Travel Sri Lanka";
   const defaultDesc = "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations.";
   const defaultImg = "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png";
 
-  // 2. Logic Check: Ensure place is a valid object
+  // 2. Logic Check: Ensure place is valid
   const hasPlace = place && typeof place === 'object' && place.place_name;
-
   const title = hasPlace ? `${place.place_name} | My Journal` : defaultTitle;
 
   // Refined Description Logic
@@ -125,19 +124,20 @@ const updateSEO = (place) => {
     }
   }
 
-  // --- URL CLEANING LOGIC ---
-  // Ensure we have a valid absolute URL and encode spaces to %20
-  let rawImageUrl = hasPlace ? (place.cover_photo_url || place.image_url || defaultImg) : defaultImg;
-  
-  // 1. Make sure it's an absolute URL
-  if (rawImageUrl && !rawImageUrl.startsWith('http')) {
-    rawImageUrl = window.location.origin + (rawImageUrl.startsWith('/') ? '' : '/') + rawImageUrl;
-  }
-  
-  // 2. Encode spaces (CRITICAL for Facebook 'Invalid URL' error)
-  const imageUrl = rawImageUrl.replace(/\s/g, '%20');
+  // --- URL SANITATION LAYER ---
+  const sanitizeUrl = (url) => {
+    if (!url) return defaultImg;
+    // Ensure absolute path
+    let absolute = url.startsWith('http') 
+      ? url 
+      : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+    // Encode spaces to %20 (Fixes 'Invalid URL' error)
+    return absolute.replace(/\s/g, '%20');
+  };
 
-  // Authoritative URL
+  const imageUrl = sanitizeUrl(hasPlace ? (place.cover_photo_url || place.image_url) : defaultImg);
+
+  // Authoritative URL (Canonical)
   const shareUrl = hasPlace
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
@@ -145,11 +145,11 @@ const updateSEO = (place) => {
   // 3. Update Browser Tab Title
   document.title = title;
 
-  // 4. Update/Create Meta Tags for Social Crawlers
+  // 4. Update/Create Meta Tags
   const metaTags = {
     'og:title': title,
     'og:description': description,
-    'og:image': imageUrl, // Now cleaned and encoded
+    'og:image': imageUrl,
     'og:url': shareUrl,
     'og:type': hasPlace ? 'article' : 'website',
     'twitter:title': title,
@@ -171,7 +171,7 @@ const updateSEO = (place) => {
     el.setAttribute('content', content || "");
   });
 
-  // 5. Canonical Link Logic
+  // 5. Canonical Link Logic (Prevents GSC 'Duplicate without user-selected canonical' error)
   let canonicalEl = document.querySelector('link[rel="canonical"]');
   if (!canonicalEl) {
     canonicalEl = document.createElement('link');
