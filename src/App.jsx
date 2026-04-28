@@ -106,29 +106,34 @@ const RenderDynamicIcon = ({ iconName, className }) => {
 
 const updateSEO = (place) => {
   // 1. Setup Defaults
-  const defaultTitle = "My Journal";
+  const defaultTitle = "My Journal | Travel Sri Lanka";
   const defaultDesc = "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations.";
   const defaultImg = "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png";
 
-  // 2. Logic Check: Ensure place is a valid object with a name
+  // 2. Logic Check: Ensure place is a valid object
   const hasPlace = place && typeof place === 'object' && place.place_name;
 
   const title = hasPlace ? `${place.place_name} | My Journal` : defaultTitle;
 
-  // Extract description: AI story -> description -> default
-  const description = hasPlace
-    ? (place.ai_article?.story?.substring(0, 150) + "..." || place.description || defaultDesc)
-    : defaultDesc;
+  // Refined Description Logic: AI Story -> Description -> Default
+  let description = defaultDesc;
+  if (hasPlace) {
+    if (place.ai_article?.story) {
+      description = place.ai_article.story.substring(0, 155).trim() + "...";
+    } else if (place.description) {
+      description = place.description;
+    }
+  }
 
-  // Prioritize the high-res cover photo for social cards
+  // Prioritize high-res cover photos for Facebook/Twitter cards
   const imageUrl = hasPlace ? (place.cover_photo_url || place.image_url || defaultImg) : defaultImg;
 
-  // Define the authoritative URL for this page
+  // Authoritative URL (Crucial for GSC and Social Sharing)
   const shareUrl = hasPlace
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
 
-  // 3. Update the actual Browser Tab Title
+  // 3. Update Browser Tab Title
   document.title = title;
 
   // 4. Update/Create Meta Tags for Social Crawlers
@@ -137,7 +142,7 @@ const updateSEO = (place) => {
     'og:description': description,
     'og:image': imageUrl,
     'og:url': shareUrl,
-    'og:type': 'website',
+    'og:type': hasPlace ? 'article' : 'website',
     'twitter:title': title,
     'twitter:description': description,
     'twitter:image': imageUrl,
@@ -146,7 +151,7 @@ const updateSEO = (place) => {
 
   Object.entries(metaTags).forEach(([prop, content]) => {
     let el = document.querySelector(`meta[property="${prop}"]`) ||
-      document.querySelector(`meta[name="${prop}"]`);
+             document.querySelector(`meta[name="${prop}"]`);
 
     if (!el) {
       el = document.createElement('meta');
@@ -157,7 +162,7 @@ const updateSEO = (place) => {
     el.setAttribute('content', content || "");
   });
 
-  // 5. Canonical Link Logic (Fix for Google Search Console)
+  // 5. Canonical Link Logic (Fix for Google Search Console indexing)
   let canonicalEl = document.querySelector('link[rel="canonical"]');
   if (!canonicalEl) {
     canonicalEl = document.createElement('link');
@@ -838,20 +843,36 @@ function App() {
   }, [notifications]);
 
   // Handle Deep Linking (Opening specific places via URL)
-  useEffect(() => {
-    if (places.length > 0) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const placeFromUrl = urlParams.get('place');
+ useEffect(() => {
 
-      if (placeFromUrl) {
-        const target = places.find(p => p.place_name === placeFromUrl);
-        if (target) {
-          setViewingArticle(target);
-          setIsArticleOpen(true);
-        }
+  if (places.length > 0) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const placeFromUrl = urlParams.get('place');
+
+    if (placeFromUrl) {
+      // Decode the URL parameter and find the matching place (case-insensitive for safety)
+      const decodedPlaceName = decodeURIComponent(placeFromUrl);
+      const target = places.find(
+        p => p.place_name.toLowerCase() === decodedPlaceName.toLowerCase()
+      );
+
+      if (target) {
+        // 1. Open the UI components
+        setViewingArticle(target);
+        setIsArticleOpen(true);
+
+        // 2. Update SEO for Search Engines and Social Media Crawlers
+        updateSEO(target);
+      } else {
+        // Fallback: If place in URL doesn't exist, reset to home SEO
+        updateSEO(null);
       }
+    } else {
+      // 3. Reset SEO to defaults if no specific place is requested
+      updateSEO(null);
     }
-  }, [places]);
+  }
+}, [places]); 
 
   useEffect(() => {
 
@@ -1395,94 +1416,68 @@ function App() {
   };
 
   const handleShare = async (e, place) => {
-    if (e) e.stopPropagation();
 
-    // 1. DYNAMIC SEO UPDATE 
-    // This updates the <head> tags so Facebook/WhatsApp crawlers see the location's image
-    if (place) {
-      const title = `${place.place_name} | My Journal`;
-      const description = `Explore ${place.place_name} on My Journal.`;
-      const imageUrl = place.cover_photo_url;
-      const shareUrl = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
+  if (e) e.stopPropagation();
+  if (!place) return;
 
-      document.title = title;
+  // 1. GENERATE SHARE CONTENT
+  // Ensure this URL format matches the one handled by your useEffect/updateSEO logic
+  const url = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
+  const shareText = `Check out this amazing spot on My Journal: ${place.place_name} ${url}`;
 
-      const metaTags = {
-        'og:title': title,
-        'og:description': description,
-        'og:image': imageUrl,
-        'og:url': shareUrl,
-        'twitter:image': imageUrl,
-        'twitter:card': 'summary_large_image'
-      };
-
-      Object.entries(metaTags).forEach(([prop, content]) => {
-        let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
-        if (!el) {
-          el = document.createElement('meta');
-          if (prop.startsWith('og:')) el.setAttribute('property', prop);
-          else el.setAttribute('name', prop);
-          document.head.appendChild(el);
-        }
-        el.setAttribute('content', content);
-      });
-    }
-
-    // 2. GENERATE SHARE CONTENT
-    const url = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
-    const shareText = `Check out this amazing spot on My Journal: ${place.place_name} ${url}`;
-
-    // 3. BULLETPROOF COPY LOGIC (Immediate Execution)
-    const copyToClipboard = async (text) => {
+  // 2. BULLETPROOF COPY LOGIC
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
       try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch (err) {
-        try {
-          const textArea = document.createElement("textarea");
-          textArea.value = text;
-          textArea.style.position = "fixed";
-          textArea.style.left = "-9999px";
-          textArea.style.top = "0";
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          const successful = document.execCommand('copy');
-          document.body.removeChild(textArea);
-          return successful;
-        } catch (fallbackErr) {
-          return false;
-        }
-      }
-    };
-
-    const copied = await copyToClipboard(shareText);
-    if (copied) {
-      showToast("Link & details copied!", "success");
-    }
-
-    // 4. MOBILE NATIVE SHARE (Opens native Apps)
-    if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
-      try {
-        await navigator.share({
-          title: `${place.place_name} | My Journal`,
-          text: `Check out this amazing spot on My Journal: ${place.place_name}`,
-          url: url
-        });
-        return;
-      } catch (err) {
-        return;
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return successful;
+      } catch (fallbackErr) {
+        return false;
       }
     }
-
-    // 5. DESKTOP MODAL FALLBACK
-    setSharingData({
-      name: place.place_name,
-      url: url,
-      text: `Check out this amazing spot on My Journal: ${place.place_name}`
-    });
-    setIsShareModalOpen(true);
   };
+
+  // Perform the copy operation immediately for the best user experience
+  const copied = await copyToClipboard(shareText);
+  if (copied) {
+    showToast("Link & details copied!", "success");
+  }
+
+  // 3. MOBILE NATIVE SHARE (Opens System Share Sheet)
+  if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+    try {
+      await navigator.share({
+        title: `${place.place_name} | My Journal`,
+        text: `Check out this amazing spot on My Journal: ${place.place_name}`,
+        url: url
+      });
+      return; // Exit if native share was successful
+    } catch (err) {
+      // User cancelled or share failed; proceed to desktop modal fallback
+    }
+  }
+
+  // 4. DESKTOP MODAL FALLBACK
+  // This opens your custom UI for users on browsers that don't support native sharing
+  setSharingData({
+    name: place.place_name,
+    url: url,
+    text: `Check out this amazing spot on My Journal: ${place.place_name}`
+  });
+  setIsShareModalOpen(true);
+};
 
   const logVisit = async (path = 'Main Page') => {
     // 1. Environment Check
