@@ -104,64 +104,56 @@ const RenderDynamicIcon = ({ iconName, className }) => {
   return <IconComponent className={className} />;
 };
 
-const updateSEO = (place) => {
-  // 1. Setup Defaults (Encoded for immediate crawler compatibility)
+const updateSEO = (place, isGallery = false) => {
   const defaultTitle = "My Journal | Travel Sri Lanka";
   const defaultDesc = "Discover hidden waterfalls, mountain treks, and cinematic 4K drone footage of Sri Lanka's most remote destinations.";
   const defaultImg = "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png";
 
-  // 2. Logic Check: Ensure place is valid
   const hasPlace = place && typeof place === 'object' && place.place_name;
-  const title = hasPlace ? `${place.place_name} | My Journal` : defaultTitle;
-
-  // Refined Description Logic
-  let description = defaultDesc;
+  
+  // LOGIC: Set the Tab Title based on context
+  let title = defaultTitle;
   if (hasPlace) {
-    if (place.ai_article?.story) {
-      description = place.ai_article.story.substring(0, 155).trim() + "...";
-    } else if (place.description) {
-      description = place.description;
-    }
+    title = isGallery 
+      ? `${place.place_name} Gallery | My Journal` 
+      : `${place.place_name} | My Journal`;
   }
 
-  // --- URL SANITATION LAYER ---
+  // Description Logic
+  let description = defaultDesc;
+  if (hasPlace) {
+    description = place.ai_article?.story 
+      ? place.ai_article.story.substring(0, 155).trim() + "..." 
+      : (place.description || defaultDesc);
+    if (isGallery) description = `Visual journey of ${place.place_name}. ${description}`;
+  }
+
   const sanitizeUrl = (url) => {
     if (!url) return defaultImg;
-    // Ensure absolute path
-    let absolute = url.startsWith('http') 
-      ? url 
-      : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
-    // Encode spaces to %20 (Fixes 'Invalid URL' error)
+    const absolute = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
     return absolute.replace(/\s/g, '%20');
   };
 
   const imageUrl = sanitizeUrl(hasPlace ? (place.cover_photo_url || place.image_url) : defaultImg);
-
-  // Authoritative URL (Canonical)
   const shareUrl = hasPlace
     ? `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`
     : window.location.origin;
 
-  // 3. Update Browser Tab Title
+  // EXECUTION: Update the Browser Tab
   document.title = title;
 
-  // 4. Update/Create Meta Tags
+  // Update Meta Tags (OG/Twitter)
   const metaTags = {
     'og:title': title,
     'og:description': description,
     'og:image': imageUrl,
     'og:url': shareUrl,
     'og:type': hasPlace ? 'article' : 'website',
-    'twitter:title': title,
-    'twitter:description': description,
-    'twitter:image': imageUrl,
     'twitter:card': 'summary_large_image'
   };
 
   Object.entries(metaTags).forEach(([prop, content]) => {
-    let el = document.querySelector(`meta[property="${prop}"]`) ||
-             document.querySelector(`meta[name="${prop}"]`);
-
+    let el = document.querySelector(`meta[property="${prop}"]`) || document.querySelector(`meta[name="${prop}"]`);
     if (!el) {
       el = document.createElement('meta');
       if (prop.startsWith('og:')) el.setAttribute('property', prop);
@@ -170,15 +162,6 @@ const updateSEO = (place) => {
     }
     el.setAttribute('content', content || "");
   });
-
-  // 5. Canonical Link Logic (Prevents GSC 'Duplicate without user-selected canonical' error)
-  let canonicalEl = document.querySelector('link[rel="canonical"]');
-  if (!canonicalEl) {
-    canonicalEl = document.createElement('link');
-    canonicalEl.setAttribute('rel', 'canonical');
-    document.head.appendChild(canonicalEl);
-  }
-  canonicalEl.setAttribute('href', shareUrl);
 };
 
 const MapSelectionComponent = React.memo(({ onLocationSelect, initialCoords, onMapReady }) => {
@@ -238,6 +221,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
+
   const [activeIndex, setActiveIndex] = React.useState(null);
   const [isSlideshowActive, setIsSlideshowActive] = React.useState(false);
 
@@ -246,16 +230,22 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
     return false;
   };
 
-  // Handle body scroll locking & initial icon render
-  React.useEffect(() => {
-    const scrollY = window.scrollY;
-    document.body.classList.add('modal-open');
-    if (window.lucide) window.lucide.createIcons();
-    return () => {
-      document.body.classList.remove('modal-open');
-      window.scrollTo(0, scrollY);
-    };
-  }, []);
+  // Handle Tab Title Change, Body scroll locking & initial icon render
+  
+React.useEffect(() => {
+
+  const scrollY = window.scrollY;
+  document.body.classList.add('modal-open');
+  
+  if (window.lucide) window.lucide.createIcons();
+
+  return () => {
+
+    document.body.classList.remove('modal-open');
+    window.scrollTo(0, scrollY);
+    
+  };
+}, []); 
 
   // Slideshow Logic
   React.useEffect(() => {
@@ -356,8 +346,8 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
           <div className="absolute top-6 right-6 flex gap-3 z-[12000]">
             <button
               className={`w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${isSlideshowActive
-                ? 'bg-indigo-600 text-white shadow-lg' // Active state
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200' // Inactive (Off-white) state
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               onClick={(e) => {
                 e.stopPropagation();
@@ -365,9 +355,6 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
               }}
               aria-label={isSlideshowActive ? "Pause Slideshow" : "Start Slideshow"}
             >
-              {/* We use a key here to trigger the CSS animation (like fade-in) 
-       whenever the icon toggles.
-    */}
               <span key={isSlideshowActive ? 'pause' : 'play'}>
                 {isSlideshowActive ? (
                   <Pause className="w-5 h-5" />
@@ -406,7 +393,6 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                 alt={`${placeName || 'Gallery'} featured view`}
                 fetchpriority="high"
               />
-              {/* Signature Watermark */}
               <div className="absolute bottom-6 right-6 pointer-events-none select-none">
                 <div className="flex flex-col items-end drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                   <span className="text-[10px] md:text-xs font-light tracking-[0.4em] text-white/70 uppercase border-b border-white/30 pb-0.5">
@@ -770,8 +756,6 @@ function App() {
 
   // --- 6. Media & Weather State ---
   const [weatherData, setWeatherData] = useState({});
-  const [activeGallery, setActiveGallery] = useState(null);
-  const [activeGalleryId, setActiveGalleryId] = useState(null);
   const [activeVideoId, setActiveVideoId] = useState(null);
   const [activeId, setActiveId] = useState(null);
 
@@ -851,43 +835,45 @@ function App() {
     if (window.lucide) window.lucide.createIcons();
   }, [notifications]);
 
-  // Handle Deep Linking (Opening specific places via URL)
- useEffect(() => {
-
+// Handle Deep Linking (Opening specific places via URL)
+useEffect(() => {
   if (places.length > 0) {
     const urlParams = new URLSearchParams(window.location.search);
     const placeFromUrl = urlParams.get('place');
 
     if (placeFromUrl) {
-      // Decode the URL parameter and find the matching place (case-insensitive for safety)
       const decodedPlaceName = decodeURIComponent(placeFromUrl);
       const target = places.find(
         p => p.place_name.toLowerCase() === decodedPlaceName.toLowerCase()
       );
 
       if (target) {
-        // 1. Open the UI components
+        // Just set the state; the Unified SEO effect below will handle the Title change
         setViewingArticle(target);
         setIsArticleOpen(true);
-
-        // 2. Update SEO for Search Engines and Social Media Crawlers
-        updateSEO(target);
-      } else {
-        // Fallback: If place in URL doesn't exist, reset to home SEO
-        updateSEO(null);
       }
-    } else {
-      // 3. Reset SEO to defaults if no specific place is requested
-      updateSEO(null);
     }
   }
-}, [places]); 
+}, [places]);
 
-  useEffect(() => {
+// The single manager for all SEO and Title updates
+useEffect(() => {
+  // 1. Find the place data for the gallery if one is active
+  const activeGalleryPlace = activeId 
+    ? places.find(p => p.id === activeId) 
+    : null;
 
-    updateSEO(ViewingArticle);
-
-  }, [ViewingArticle]);
+  if (activeGalleryPlace) {
+    // Priority 1: User is looking at the Photo Gallery
+    updateSEO(activeGalleryPlace, true);
+  } else if (isArticleOpen && ViewingArticle) {
+    // Priority 2: User is reading the Article
+    updateSEO(ViewingArticle, false);
+  } else {
+    // Priority 3: User is on the Home Map/List
+    updateSEO(null);
+  }
+}, [activeId, ViewingArticle, isArticleOpen, places]);
 
   // --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
 
@@ -1429,137 +1415,136 @@ function App() {
 
   const handleShare = async (e, place) => {
 
-  if (e) e.stopPropagation();
-  if (!place) return;
+    if (e) e.stopPropagation();
+    if (!place) return;
 
-  // 1. GENERATE SHARE CONTENT
-  // Ensure this URL format matches the one handled by your useEffect/updateSEO logic
-  const url = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
-  const shareText = `Check out this amazing spot on My Journal: ${place.place_name} ${url}`;
+    // 1. GENERATE SHARE CONTENT
+    // Ensure this URL format matches the one handled by your useEffect/updateSEO logic
+    const url = `${window.location.origin}${window.location.pathname}?place=${encodeURIComponent(place.place_name)}`;
+    const shareText = `Check out this amazing spot on My Journal: ${place.place_name} ${url}`;
 
-  // 2. BULLETPROOF COPY LOGIC
-  const copyToClipboard = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (err) {
+    // 2. BULLETPROOF COPY LOGIC
+    const copyToClipboard = async (text) => {
       try {
-        const textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-9999px";
-        textArea.style.top = "0";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        return successful;
-      } catch (fallbackErr) {
-        return false;
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          textArea.style.top = "0";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          return successful;
+        } catch (fallbackErr) {
+          return false;
+        }
+      }
+    };
+
+    // Perform the copy operation immediately for the best user experience
+    const copied = await copyToClipboard(shareText);
+    if (copied) {
+      showToast("Link & details copied!", "success");
+    }
+
+    // 3. MOBILE NATIVE SHARE (Opens System Share Sheet)
+    if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      try {
+        await navigator.share({
+          title: `${place.place_name} | My Journal`,
+          text: `Check out this amazing spot on My Journal: ${place.place_name}`,
+          url: url
+        });
+        return; // Exit if native share was successful
+      } catch (err) {
+        // User cancelled or share failed; proceed to desktop modal fallback
       }
     }
+
+    // 4. DESKTOP MODAL FALLBACK
+    // This opens your custom UI for users on browsers that don't support native sharing
+    setSharingData({
+      name: place.place_name,
+      url: url,
+      text: `Check out this amazing spot on My Journal: ${place.place_name}`
+    });
+    setIsShareModalOpen(true);
   };
 
-  // Perform the copy operation immediately for the best user experience
-  const copied = await copyToClipboard(shareText);
-  if (copied) {
-    showToast("Link & details copied!", "success");
-  }
-
-  // 3. MOBILE NATIVE SHARE (Opens System Share Sheet)
-  if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
-    try {
-      await navigator.share({
-        title: `${place.place_name} | My Journal`,
-        text: `Check out this amazing spot on My Journal: ${place.place_name}`,
-        url: url
-      });
-      return; // Exit if native share was successful
-    } catch (err) {
-      // User cancelled or share failed; proceed to desktop modal fallback
-    }
-  }
-
-  // 4. DESKTOP MODAL FALLBACK
-  // This opens your custom UI for users on browsers that don't support native sharing
-  setSharingData({
-    name: place.place_name,
-    url: url,
-    text: `Check out this amazing spot on My Journal: ${place.place_name}`
-  });
-  setIsShareModalOpen(true);
-};
-
   const logVisit = async (path = 'Main Page') => {
-  // 1. Environment Check
-  if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
-    return;
-  }
+    // 1. Environment Check
+    if (window.location.protocol === 'file:' || window.location.hostname === 'localhost') {
+      return;
+    }
 
-  // 2. SECRET URL ACTIVATION
-  // Access via: yoursite.com/?mode=owner
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('mode') === 'owner') {
-    localStorage.setItem('owner_auth_token', 'owner');
-    console.log("Owner mode activated.");
-  }
+    // 2. SECRET URL ACTIVATION
+    // Access via: yoursite.com/?mode=owner
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'owner') {
+      localStorage.setItem('owner_auth_token', 'owner');
+      console.log("Owner mode activated.");
+    }
 
-  // 3. Owner Exclusion Check
-  if (localStorage.getItem('owner_auth_token') === 'owner') {
-    return; // Exit: You are invisible to the logs
-  }
+    // 3. Owner Exclusion Check
+    if (localStorage.getItem('owner_auth_token') === 'owner') {
+      return; // Exit: You are invisible to the logs
+    }
 
-  // 4. Session Lock for Main Page Only
-  // This allows 'Plan Function' to be logged every time it is clicked,
-  // but prevents 'Main Page' from spamming the DB on refresh.
-  if (path === 'Main Page') {
-    if (sessionStorage.getItem('visit_logged')) return;
-    sessionStorage.setItem('visit_logged', 'true');
-  }
+    // 4. Session Lock for Main Page Only
 
-  // 5. Fetch Geographic Data
-  let geo = null;
-  const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
+    if (path === 'Main Page') {
+      if (sessionStorage.getItem('visit_logged')) return;
+      sessionStorage.setItem('visit_logged', 'true');
+    }
 
-  for (const url of providers) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        geo = {
-          ip: data.ip || data.query || data.ipAddress || '',
-          country: data.country_name || data.countryName || data.country || 'Unknown',
-          region: data.region_name || data.stateProv || data.region || 'Unknown',
-          city: data.city || 'Unknown'
-        };
-        break;
-      }
-    } catch (e) { /* Silently fail to next provider */ }
-  }
+    // 5. Fetch Geographic Data
+    let geo = null;
+    const providers = ['https://ipapi.co/json/', 'https://api.db-ip.com/v2/free/self'];
 
-  if (!geo || !geo.ip) {
-    if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
-    return;
-  }
+    for (const url of providers) {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          geo = {
+            ip: data.ip || data.query || data.ipAddress || '',
+            country: data.country_name || data.countryName || data.country || 'Unknown',
+            region: data.region_name || data.stateProv || data.region || 'Unknown',
+            city: data.city || 'Unknown'
+          };
+          break;
+        }
+      } catch (e) { /* Silently fail to next provider */ }
+    }
 
-  // 6. Submit to Database
-  const { error } = await supabaseClient
-    .from('page_visits')
-    .insert([{
-      page_path: path,
-      user_agent: navigator.userAgent,
-      country: geo.country,
-      region: geo.region,
-      city: geo.city,
-      ip_address: geo.ip
-    }]);
+    if (!geo || !geo.ip) {
+      if (path === 'Main Page') sessionStorage.removeItem('visit_logged');
+      return;
+    }
 
-  // 7. Cleanup on Error
-  if (error && path === 'Main Page') {
-    sessionStorage.removeItem('visit_logged');
-  }
-};
+    // 6. Submit to Database
+    const { error } = await supabaseClient
+      .from('page_visits')
+      .insert([{
+        page_path: path,
+        user_agent: navigator.userAgent,
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
+        ip_address: geo.ip
+      }]);
+
+    // 7. Cleanup on Error
+    if (error && path === 'Main Page') {
+      sessionStorage.removeItem('visit_logged');
+    }
+  };
 
 
   const getUserLocation = () => {
