@@ -58,7 +58,7 @@ const GoogleBottomAd = () => {
   }, []);
 
   return (
-    <div className="my-8 flex justify-center w-full min-h-[100px] overflow-hidden bg-slate-50/50 rounded-xl">
+    <div className="my-8 flex justify-center w-full min-h-[280px] md:min-h-[90px] overflow-hidden bg-slate-50/50 rounded-xl">
       <ins
         ref={adRef}
         className="adsbygoogle"
@@ -319,7 +319,7 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                   We set it to 'eager' and high priority if it's index 0.
                 */
                 loading={i === 0 ? "eager" : "lazy"}
-                fetchpriority={i === 0 ? "high" : "auto"}
+                fetchPriority={i === 0 ? "high" : "auto"}
                 alt={`${placeName || 'Adventure'} - Image ${i + 1}`}
               />
             </article>
@@ -375,7 +375,7 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
                 className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in fade-in zoom-in-95 duration-500"
                 alt={`${placeName || 'Gallery'} featured view`}
                 /* Overlay LCP: The focused image must load instantly */
-                fetchpriority="high"
+                fetchPriority="high"
                 loading="eager"
               />
               {/* Invisible Watermark logic maintained */}
@@ -472,7 +472,7 @@ const VideoGallery = React.memo(({ videos, onClose }) => {
                   className="w-full h-full border-0"
                   allow="autoplay; encrypted-media"
                   allowFullScreen
-                  loading="lazy"
+                  loading="eager"
                 ></iframe>
               </div>
             );
@@ -1087,15 +1087,36 @@ function App() {
 
   /** * Data Fetching from Supabase
    */
+
   const fetchPlaces = useCallback(async () => {
     try {
+
       const { data, error } = await supabaseClient
         .from('travel_bucket_list')
-        .select('*')
+        .select(`
+        id, 
+        place_name,
+        locality, 
+        category, 
+        status, 
+        cover_photo_url, 
+        latitude, 
+        longitude, 
+        google_maps_url, 
+        album_photos,
+        ai_article_preview:ai_article->story 
+      `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setPlaces(data || []);
+      // Map the preview to keep the UI compatible
+      const optimizedData = data.map(p => ({
+        ...p,
+        hasArticle: !!p.ai_article_preview,
+        // Store a short snippet for the card, fetch full on click
+        ai_article: p.ai_article_preview ? { story: p.ai_article_preview.substring(0, 100) } : null
+      }));
+      setPlaces(optimizedData);
     } catch (err) {
       console.error("Fetch Error:", err.message);
       showToast("Failed to load locations", "error");
@@ -1692,7 +1713,62 @@ function App() {
 
 
 
+  const handleOpenArticle = async (place) => {
+    // 1. Open with preview immediately
+    setViewingArticle(place);
+    setIsArticleOpen(true);
 
+    // 2. Cache Check (New Logic)
+    if (place.ai_article && place.ai_article.isFullContent) return;
+
+    try {
+      const { data, error } = await supabaseClient
+        .from('travel_bucket_list')
+        .select('ai_article')
+        .eq('id', place.id)
+        .single();
+
+      if (!error && data?.ai_article) {
+        setViewingArticle(prev => ({
+          ...prev,
+          ai_article: { ...data.ai_article, isFullContent: true }
+        }));
+      }
+    } catch (err) {
+      showToast("Error loading content", "error");
+    }
+  };
+
+  const ArticleSkeleton = () => {
+    return (
+      <div className="animate-pulse space-y-6 p-4">
+        {/* Title Placeholder */}
+        <div className="h-8 bg-gray-200 rounded-md w-3/4 mb-4"></div>
+
+        {/* Meta Data Placeholder (Date/Location) */}
+        <div className="flex gap-4">
+          <div className="h-4 bg-gray-200 rounded w-24"></div>
+          <div className="h-4 bg-gray-200 rounded w-32"></div>
+        </div>
+
+        {/* Main Content Paragraphs */}
+        <div className="space-y-3">
+          <div className="h-4 bg-gray-200 rounded w-full"></div>
+          <div className="h-4 bg-gray-200 rounded w-full"></div>
+          <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+        </div>
+
+        {/* Secondary Image Placeholder */}
+        <div className="h-48 bg-gray-200 rounded-lg w-full"></div>
+
+        {/* More Paragraphs */}
+        <div className="space-y-3">
+          <div className="h-4 bg-gray-200 rounded w-full"></div>
+          <div className="h-4 bg-gray-200 rounded w-4/5"></div>
+        </div>
+      </div>
+    );
+  };
 
 
 
@@ -1930,7 +2006,6 @@ function App() {
 
           {/* LEFT SIDE: Logo & Identity */}
           <div className="flex items-center gap-4 md:gap-6">
-            {/* Logo Container */}
             <div className="shrink-0 w-16 h-16 md:w-24 md:h-24 flex items-center justify-center bg-white rounded-2xl shadow-md border border-slate-100 overflow-hidden p-1.5">
               <img
                 src="https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png"
@@ -1939,7 +2014,6 @@ function App() {
               />
             </div>
 
-            {/* Identity Text */}
             <div className="flex flex-col justify-center">
               <h1 className="text-2xl sm:text-4xl font-black tracking-tighter text-slate-800 leading-none">
                 My Journal
@@ -1952,8 +2026,6 @@ function App() {
 
           {/* RIGHT SIDE: Toggle Button & Hub Controls */}
           <div className="flex items-center gap-2">
-
-            {/* Filters Toggle - Visible on ALL screens and positioned on the RIGHT */}
             <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
               className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all hover:bg-slate-800"
@@ -1962,7 +2034,7 @@ function App() {
               <span>{isFilterOpen ? 'Close' : 'Filters'}</span>
             </button>
 
-            {/* Standardized Dual Hub System (Fixed positioning) */}
+            {/* Standardized Dual Hub System */}
             {!isAddOpen && !isPlannerOpen && !isArticleOpen && !isShareModalOpen && (
               <div className="fixed bottom-4 right-3 z-[4000] flex flex-col items-end gap-2 max-w-[140px]">
                 {/* HUB 1: SOCIAL HUB */}
@@ -2019,52 +2091,53 @@ function App() {
           </div>
         </header>
 
-        {/* 2. SEARCH, FILTER & SORT BLOCK */}
-        {/* Behavior: Strictly toggled by isFilterOpen on ALL screens */}
-        <div className={`
-    ${isFilterOpen ? 'flex' : 'hidden'} 
-    flex-col bg-white p-5 mx-4 md:mx-10 rounded-3xl shadow-xl border border-slate-100 mb-6 transition-all duration-300 relative z-[50]
-  `}>
-          <div className="flex flex-col md:flex-row gap-3 mb-4 w-full">
-            {/* Search Input */}
-            <div className="flex-[2] relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search destinations..."
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-50 font-bold text-[11px] outline-none border border-transparent focus:border-slate-200 transition-all text-slate-800"
-              />
-            </div>
+        {/* 2. SEARCH, FILTER & SORT BLOCK - CLS FIXED */}
+        {/* Behavior: Uses CSS Grid interpolation for smooth, stable expansion */}
+        <div className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-in-out relative z-[50] mx-4 md:mx-10 ${isFilterOpen ? 'grid-rows-[1fr] opacity-100 mb-6' : 'grid-rows-[0fr] opacity-0 mb-0 pointer-events-none'}`}>
+          <div className="overflow-hidden flex flex-col bg-white rounded-3xl shadow-xl border border-slate-100">
+            <div className="p-5">
+              <div className="flex flex-col md:flex-row gap-3 mb-4 w-full">
+                {/* Search Input */}
+                <div className="flex-[2] relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Search destinations..."
+                    className="w-full pl-11 pr-4 py-3 rounded-xl bg-slate-50 font-bold text-[11px] outline-none border border-transparent focus:border-slate-200 transition-all text-slate-800"
+                  />
+                </div>
 
-            {/* Sort Function */}
-            <div className="relative flex-1">
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-                className="w-full bg-slate-900 text-white border border-slate-900 rounded-xl px-4 py-3 text-[10px] font-black uppercase appearance-none focus:outline-none shadow-lg shadow-slate-900/20 cursor-pointer"
-              >
-                <option value="recent">Newest First</option>
-                <option value="distance">Nearest First</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-100/50 pointer-events-none" />
-            </div>
-          </div>
+                {/* Sort Function */}
+                <div className="relative flex-1">
+                  <select
+                    value={sortBy}
+                    onChange={e => setSortBy(e.target.value)}
+                    className="w-full bg-slate-900 text-white border border-slate-900 rounded-xl px-4 py-3 text-[10px] font-black uppercase appearance-none focus:outline-none shadow-lg shadow-slate-900/20 cursor-pointer"
+                  >
+                    <option value="recent">Newest First</option>
+                    <option value="distance">Nearest First</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-100/50 pointer-events-none" />
+                </div>
+              </div>
 
-          {/* Category Tags */}
-          <div className="flex flex-wrap gap-2 w-full pt-2 border-t border-slate-50">
-            {['All', ...VALID_CATEGORIES].map(tag => (
-              <button
-                key={tag}
-                onClick={() => setFilterTag(tag)}
-                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all active:scale-95 ${filterTag === tag
-                  ? 'bg-slate-900 text-white shadow-lg'
-                  : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                  }`}
-              >
-                {tag}
-              </button>
-            ))}
+              {/* Category Tags */}
+              <div className="flex flex-wrap gap-2 w-full pt-2 border-t border-slate-50">
+                {['All', ...VALID_CATEGORIES].map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => setFilterTag(tag)}
+                    className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all active:scale-95 ${filterTag === tag
+                      ? 'bg-slate-900 text-white shadow-lg'
+                      : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                      }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2073,129 +2146,150 @@ function App() {
       <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
         {/* 1. Main Grid: Location Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
-          {displayedPlaces.map((place, index) => (
-            <article
-              key={place.id}
-              className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl"
-            >
-              {/* CLS FIX: Explicit height/aspect-ratio for the image container */}
-              <header className="h-40 md:h-48 w-full relative bg-slate-100 overflow-hidden aspect-video md:aspect-auto">
-                {place.cover_photo_url && (
-                  <img
-                    src={getOptimizedUrl(place.cover_photo_url, 600, 75)}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    /* 
-                       LCP FIX: Priority load for index 0 (above-the-fold content)
-                       CLS FIX: Aspect ratio preservation prevents layout jumping 
-                    */
-                    loading={index === 0 ? "eager" : "lazy"}
-                    fetchpriority={index === 0 ? "high" : "auto"}
-                    alt={`Scenic view of ${place.place_name}`}
-                  />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                <div className="absolute top-4 left-4">
-                  <span
-                    className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${place.status === "done" ? "bg-emerald-500/90 text-white" : "bg-amber-500/90 text-white"
-                      }`}
-                  >
-                    {place.status === "done" ? "✨ Visited" : "⏳ Bucket List"}
-                  </span>
-                </div>
-                <div className="absolute bottom-3 left-4 pr-4">
-                  <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
-                    {auditLocationName(place.place_name)}
-                  </h3>
-                </div>
-              </header>
-
-              <main className="p-4 flex flex-col flex-1">
-                <div className="flex justify-between items-start mb-1">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
-                      {place.locality || "Explore"}
-                    </span>
+          {/* 1. SKELETON STATE: Prevents CLS by reserving space while 'places' is empty/loading */}
+          {places.length === 0 ? (
+            Array.from({ length: 8 }).map((_, i) => (
+              <article key={`skeleton-${i}`} className="group relative rounded-[2rem] bg-slate-50 border border-slate-100 overflow-hidden flex flex-col shadow-sm min-h-[450px] animate-pulse">
+                <div className="w-full aspect-video bg-slate-200"></div>
+                <div className="p-4 flex flex-col flex-1 gap-4">
+                  <div className="h-4 bg-slate-200 rounded-md w-3/4"></div>
+                  <div className="h-3 bg-slate-200 rounded-md w-1/2"></div>
+                  <div className="mt-auto grid grid-cols-3 gap-2">
+                    <div className="h-8 bg-slate-200 rounded-xl"></div>
+                    <div className="h-8 bg-slate-200 rounded-xl"></div>
+                    <div className="h-8 bg-slate-200 rounded-xl"></div>
                   </div>
-                  <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100 text-[8px] font-black uppercase shrink-0">
-                    {place.category}
-                  </span>
                 </div>
+              </article>
+            ))
+          ) : (
+            /* 2. ACTUAL CONTENT: Rendered once data exists */
+            displayedPlaces.map((place, index) => {
+              const isPriority = index < 2;
 
-                {/* Distance calculation display */}
-                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                  {userCoords
-                    ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY`
-                    : "Location Access Required"}
-                </div>
+              return (
+                <article
+                  key={place.id}
+                  className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl"
+                >
+                  <header className="relative w-full aspect-video bg-slate-200 overflow-hidden">
+                    {place.cover_photo_url && (
+                      <img
+                        src={getOptimizedUrl(place.cover_photo_url, 400, 70)}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        loading={isPriority ? "eager" : "lazy"}
+                        fetchPriority={isPriority ? "high" : "auto"}
+                        alt={`Scenic view of ${place.place_name}`}
+                      />
+                    )}
 
-                {place.status !== "pending" && (
-                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-50">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
-                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
-                    >
-                      <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
-                        <Heart className={`w-4 h-4 ${likes[place.id] ? "fill-rose-500 text-rose-500" : "text-slate-400"}`} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                    <div className="absolute top-4 left-4">
+                      <span
+                        className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${place.status === "done" ? "bg-emerald-500/90 text-white" : "bg-amber-500/90 text-white"
+                          }`}
+                      >
+                        {place.status === "done" ? "✨ Visited" : "⏳ Bucket List"}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-3 left-4 pr-4">
+                      <h3 className="text-white text-xs md:text-sm font-extrabold uppercase tracking-tight">
+                        {auditLocationName(place.place_name)}
+                      </h3>
+                    </div>
+                  </header>
+
+                  <main className="p-4 flex flex-col flex-1">
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
+                          {place.locality || "Explore"}
+                        </span>
                       </div>
-                      <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setIsArticleOpen(true); }}
-                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
-                    >
-                      <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
-                        <MessageCircle className="w-4 h-4 text-slate-400" />
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
-                    </button>
-                    <button
-                      onClick={(e) => handleShare(e, place)}
-                      className="flex items-center gap-1.5 group outline-none select-none"
-                    >
-                      <div className="p-2 rounded-full group-hover:bg-emerald-50 transition-colors">
-                        <Share2 className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
-                      </div>
-                    </button>
-                  </div>
-                )}
+                      <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100 text-[8px] font-black uppercase shrink-0">
+                        {place.category}
+                      </span>
+                    </div>
 
-                <footer className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
-                  {place.google_maps_url && (
-                    <button
-                      onClick={() => window.open(place.google_maps_url, "_blank")}
-                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all border border-slate-100/50"
-                    >
-                      <MapIcon className="w-6 h-6" />
-                      <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
-                    </button>
-                  )}
-                  {place.album_photos && (
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveId(place.id); }}
-                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100/50"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5" />
-                      <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
-                    </button>
-                  )}
-                  {place.ai_article?.story && (
-                    <button
-                      onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }}
-                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100/50"
-                    >
-                      <BookOpen className="w-3.5 h-3.5" />
-                      <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
-                    </button>
-                  )}
-                </footer>
-              </main>
-            </article>
-          ))}
+                    <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                      {userCoords
+                        ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY`
+                        : "Location Access Required"}
+                    </div>
 
-          {/* ADSTERRA GRID ITEM - CLS FIXED */}
-          <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex items-center justify-center p-4 min-h-[300px]">
-            <div id="container-023accb7675231a6241cd0771cc13617" className="w-full h-full flex items-center justify-center min-h-[250px]">
-              {/* Placeholder logic prevents jumping when script loads */}
+                    {place.status !== "pending" && (
+                      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-50">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleLike(place.id); }}
+                          className="flex items-center gap-1.5 group outline-none select-none pr-2"
+                        >
+                          <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
+                            <Heart className={`w-4 h-4 ${likes[place.id] ? "fill-rose-500 text-rose-500" : "text-slate-400"}`} />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setIsArticleOpen(true); }}
+                          className="flex items-center gap-1.5 group outline-none select-none pr-2"
+                        >
+                          <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
+                            <MessageCircle className="w-4 h-4 text-slate-400" />
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
+                        </button>
+                        <button
+                          onClick={(e) => handleShare(e, place)}
+                          className="flex items-center gap-1.5 group outline-none select-none"
+                        >
+                          <div className="p-2 rounded-full group-hover:bg-emerald-50 transition-colors">
+                            <Share2 className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
+                          </div>
+                        </button>
+                      </div>
+                    )}
+
+                    <footer className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
+                      {place.google_maps_url && (
+                        <button
+                          onClick={() => window.open(place.google_maps_url, "_blank")}
+                          className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all border border-slate-100/50"
+                        >
+                          <MapIcon className="w-4 h-4" />
+                          <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
+                        </button>
+                      )}
+                      {place.album_photos && (
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveId(place.id); }}
+                          className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100/50"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
+                        </button>
+                      )}
+                      {place.ai_article?.story && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevents triggering the card's main click event
+                            handleOpenArticle(place);
+                          }}
+                          className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100/50"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
+                        </button>
+                      )}
+                    </footer>
+                  </main>
+                </article>
+              );
+            })
+          )}
+
+          {/* 3. ADSTERRA GRID ITEM: Height locked to prevent shifting when the script finishes execution */}
+          <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex flex-col items-center justify-center p-4 min-h-[450px]">
+            <div id="container-023accb7675231a6241cd0771cc13617" className="w-full flex-1 flex items-center justify-center min-h-[250px]">
+              {/* Script injects content here; the min-h ensures the container doesn't start at 0px */}
             </div>
             <div className="absolute top-4 right-4">
               <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
@@ -2242,9 +2336,9 @@ function App() {
           }}></div>
 
           <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            {/* Header Image */}
+            {/* Header Image - Always available from initial list fetch */}
             <div className="relative h-48 w-full shrink-0">
-              <img src={ViewingArticle.cover_photo_url} className="h-full w-full object-cover" />
+              <img src={ViewingArticle.cover_photo_url} className="h-full w-full object-cover" alt={ViewingArticle.place_name} />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
               <button
                 onClick={() => {
@@ -2264,34 +2358,25 @@ function App() {
                   {ViewingArticle.category}
                 </span>
                 <div className="flex items-center gap-2">
-
-                  {/* Share Button (Updated to trigger Custom Dialog) */}
                   <button
                     onClick={() => handleShare(null, ViewingArticle)}
                     className="p-2 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-100 rounded-xl transition-colors border border-slate-100 group"
-                    title="Share this location"
                   >
                     <Share2 className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-600" />
                   </button>
-
                   <button
                     onClick={() => window.open(ViewingArticle.google_maps_url || `https://www.google.com/maps?q=${ViewingArticle.latitude},${ViewingArticle.longitude}`, '_blank')}
                     className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors border border-slate-100"
                   >
                     <MapPin className="w-3.5 h-3.5 text-slate-500" />
                   </button>
-
                   {ViewingArticle.status !== 'pending' && (
                     <button
                       onClick={() => handleLike(ViewingArticle.id)}
                       className="flex items-center gap-2 bg-slate-50 hover:bg-rose-50 px-4 py-2 rounded-2xl border border-slate-100 transition-all"
                     >
-                      <Heart
-                        className={`w-4 h-4 ${likes[ViewingArticle.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`}
-                      />
-                      <span className="text-[10px] font-black text-slate-900">
-                        {likes[ViewingArticle.id] || 0}
-                      </span>
+                      <Heart className={`w-4 h-4 ${likes[ViewingArticle.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
+                      <span className="text-[10px] font-black text-slate-900">{likes[ViewingArticle.id] || 0}</span>
                     </button>
                   )}
                 </div>
@@ -2304,19 +2389,30 @@ function App() {
                 </h2>
 
                 <div className="prose prose-slate">
-                  <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-line">
-                    {ViewingArticle.ai_article?.story || "Journey details are being prepared..."}
-                  </p>
+                  {/* FIX: Conditional Skeleton Loading */}
+                  {ViewingArticle.ai_article?.isFullContent ? (
+                    <>
+                      <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-line">
+                        {ViewingArticle.ai_article.story}
+                      </p>
+                      {ViewingArticle.ai_article.specs && (
+                        <div className="mt-6 p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100 italic">
+                          <h4 className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Technical Specs & Access</h4>
+                          <p className="text-[11px] text-slate-500 leading-normal">
+                            {ViewingArticle.ai_article.specs}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="animate-pulse space-y-4">
+                      <div className="h-4 bg-slate-100 rounded w-full"></div>
+                      <div className="h-4 bg-slate-100 rounded w-full"></div>
+                      <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+                      <div className="h-32 bg-slate-50 rounded-2xl w-full mt-6"></div>
+                    </div>
+                  )}
                 </div>
-
-                {ViewingArticle.ai_article?.specs && (
-                  <div className="mt-6 p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100 italic">
-                    <h4 className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Technical Specs & Access</h4>
-                    <p className="text-[11px] text-slate-500 leading-normal">
-                      {ViewingArticle.ai_article.specs}
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* DISCUSSION SECTION */}
@@ -2334,29 +2430,11 @@ function App() {
                         <span className="text-[8px] font-bold text-slate-400 uppercase">
                           {new Date(c.created_at).toLocaleDateString()}
                         </span>
-                        {(c.city || c.country) && (
-                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">
-                            {[c.city, c.country].filter(Boolean).join(', ')}
-                          </span>
-                        )}
                       </div>
-
-                      {c.reply_text && (
-                        <div className="mt-4 pt-4 border-t border-slate-200/60">
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <div className="w-1 h-3 bg-indigo-500 rounded-full"></div>
-                            <span className="text-[8px] font-black text-indigo-600 uppercase tracking-tighter">Author Response</span>
-                          </div>
-                          <div className="bg-white p-3 rounded-xl border border-slate-100">
-                            <p className="text-[10px] text-slate-600 leading-relaxed italic">"{c.reply_text}"</p>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
 
-                {/* INPUT SECTION */}
                 <div className="relative sticky bottom-0 bg-white pt-2">
                   <input
                     type="text"
@@ -2374,7 +2452,7 @@ function App() {
                   />
                   <button
                     onClick={() => { if (NewCommentText.trim()) submitComment(ViewingArticle.id, NewCommentText); setNewCommentText(''); }}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 mt-1"
+                    className="absolute right-4 top-1/2 -translate-y-1/2"
                   >
                     <Send className="w-4 h-4 text-slate-400" />
                   </button>
@@ -2384,7 +2462,9 @@ function App() {
               <button onClick={() => {
                 setIsArticleOpen(false);
                 setViewingArticle(null);
-              }} className="mt-8 w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-colors">Close Journal</button>
+              }} className="mt-8 w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-colors">
+                Close Journal
+              </button>
             </div>
           </div>
         </div>
