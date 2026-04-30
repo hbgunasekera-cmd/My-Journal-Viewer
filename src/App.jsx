@@ -2322,7 +2322,80 @@ function App() {
         {/* 4. SHARE DIALOG SYSTEM maintained */}
         {isShareModalOpen && sharingData && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* ... Share Modal Logic ... */}
+            <div
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setIsShareModalOpen(false)}
+            ></div>
+
+            <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Share2 className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Share Journey</h3>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">{sharingData.name}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* WhatsApp: Supports Text + Link */}
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(sharingData.text + " " + sharingData.url)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 transition-colors group text-center"
+                >
+                  <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-110 transition-transform">
+                    <MessageCircle className="w-5 h-5 fill-current" />
+                  </div>
+                  <span className="text-[9px] font-black text-emerald-700 uppercase tracking-tighter">WhatsApp</span>
+                </a>
+
+                {/* Facebook: ONLY URL (Facebook handles the preview via your SEO tags) */}
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharingData.url)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-colors group text-center"
+                >
+                  <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
+                    <span className="font-black text-lg">f</span>
+                  </div>
+                  <span className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">Facebook</span>
+                </a>
+
+                {/* X (Twitter): Supports Text + Link */}
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(sharingData.text)}&url=${encodeURIComponent(sharingData.url)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-slate-50 hover:bg-slate-200 transition-colors group text-center"
+                >
+                  <div className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center shadow-lg shadow-slate-300 group-hover:scale-110 transition-transform">
+                    <X className="w-4 h-4" />
+                  </div>
+                  <span className="text-[9px] font-black text-slate-700 uppercase tracking-tighter">Twitter (X)</span>
+                </a>
+
+                {/* Copy Link: The most reliable way for Instagram/Stories */}
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(sharingData.url);
+                    showToast("Link ready to paste!", "success");
+                    setIsShareModalOpen(false);
+                  }}
+                  className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-indigo-50 hover:bg-indigo-100 transition-colors group text-center"
+                >
+                  <div className="w-10 h-10 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                  <span className="text-[9px] font-black text-indigo-700 uppercase tracking-tighter">Copy Link</span>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setIsShareModalOpen(false)}
+                className="w-full mt-8 py-4 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-slate-900 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
       </div>
