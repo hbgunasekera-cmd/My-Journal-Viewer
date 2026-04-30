@@ -110,20 +110,20 @@ const updateSEO = (place, isGallery = false) => {
   const defaultImg = "https://vpslgikpaintiuayajmx.supabase.co/storage/v1/object/public/Logo/My%20Journal%20Logo.png";
 
   const hasPlace = place && typeof place === 'object' && place.place_name;
-  
+
   // LOGIC: Set the Tab Title based on context
   let title = defaultTitle;
   if (hasPlace) {
-    title = isGallery 
-      ? `${place.place_name} Gallery | My Journal` 
+    title = isGallery
+      ? `${place.place_name} Gallery | My Journal`
       : `${place.place_name} | My Journal`;
   }
 
   // Description Logic
   let description = defaultDesc;
   if (hasPlace) {
-    description = place.ai_article?.story 
-      ? place.ai_article.story.substring(0, 155).trim() + "..." 
+    description = place.ai_article?.story
+      ? place.ai_article.story.substring(0, 155).trim() + "..."
       : (place.description || defaultDesc);
     if (isGallery) description = `Visual journey of ${place.place_name}. ${description}`;
   }
@@ -221,7 +221,6 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
-
   const [activeIndex, setActiveIndex] = React.useState(null);
   const [isSlideshowActive, setIsSlideshowActive] = React.useState(false);
 
@@ -230,22 +229,17 @@ const PhotoGallery = React.memo(({ photos, onClose, placeName }) => {
     return false;
   };
 
-  // Handle Tab Title Change, Body scroll locking & initial icon render
-  
-React.useEffect(() => {
+  // Handle Body scroll locking
+  React.useEffect(() => {
+    const scrollY = window.scrollY;
+    document.body.classList.add('modal-open');
 
-  const scrollY = window.scrollY;
-  document.body.classList.add('modal-open');
-  
-  if (window.lucide) window.lucide.createIcons();
 
-  return () => {
-
-    document.body.classList.remove('modal-open');
-    window.scrollTo(0, scrollY);
-    
-  };
-}, []); 
+    return () => {
+      document.body.classList.remove('modal-open');
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
 
   // Slideshow Logic
   React.useEffect(() => {
@@ -256,14 +250,6 @@ React.useEffect(() => {
       }, 5000);
     }
     return () => clearTimeout(timer);
-  }, [isSlideshowActive, activeIndex]);
-
-  // Icon Refresh Logic - Ensures Lucide re-scans the DOM when state changes
-  React.useEffect(() => {
-    if (window.lucide) {
-      const timeoutId = setTimeout(() => window.lucide.createIcons(), 0);
-      return () => clearTimeout(timeoutId);
-    }
   }, [isSlideshowActive, activeIndex]);
 
   // Keyboard Navigation
@@ -355,13 +341,11 @@ React.useEffect(() => {
               }}
               aria-label={isSlideshowActive ? "Pause Slideshow" : "Start Slideshow"}
             >
-              <span key={isSlideshowActive ? 'pause' : 'play'}>
-                {isSlideshowActive ? (
-                  <Pause className="w-5 h-5" />
-                ) : (
-                  <Play className="w-5 h-5" />
-                )}
-              </span>
+              {isSlideshowActive ? (
+                <Pause className="w-5 h-5" />
+              ) : (
+                <Play className="w-5 h-5" />
+              )}
             </button>
             <button
               className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all"
@@ -411,12 +395,12 @@ React.useEffect(() => {
       )}
 
       <style>{`
-                @keyframes progress { from { width: 0%; } to { width: 100%; } }
-                .modal-open { overflow: hidden !important; }
-                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-            `}</style>
+          @keyframes progress { from { width: 0%; } to { width: 100%; } }
+          .modal-open { overflow: hidden !important; }
+          .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+      `}</style>
     </div>
   );
 });
@@ -426,7 +410,7 @@ const VideoGallery = React.memo(({ videos, onClose }) => {
     // Prevent background scrolling
     document.body.style.overflow = 'hidden';
 
-    // DYNAMIC SCRIPT LOADING FIX
+    // DYNAMIC SCRIPT LOADING
     const scriptId = 'tiktok-embed-script';
     if (!document.getElementById(scriptId)) {
       const script = document.createElement('script');
@@ -434,12 +418,8 @@ const VideoGallery = React.memo(({ videos, onClose }) => {
       script.src = "https://www.tiktok.com/embed.js";
       script.async = true;
       document.body.appendChild(script);
-    } else {
-      // If script exists, re-process the embeds
-      if (window.instgrm) window.instgrm.Embeds.process();
     }
 
-    if (window.lucide) window.lucide.createIcons();
 
     return () => {
       document.body.style.overflow = 'unset';
@@ -591,6 +571,19 @@ const MapComponent = ({
   useEffect(() => {
     if (!mapInstance.current) return;
 
+    // FIX: Track current place IDs to identify which markers to keep
+    const currentPlaceIds = new Set(places.map(p => p.id));
+
+    // FIX: Cleanup Phase - Remove markers that are no longer in the places array
+    Object.keys(markerRegistryRef.current).forEach(id => {
+      // Check for both string and number IDs to ensure compatibility
+      if (!currentPlaceIds.has(Number(id)) && !currentPlaceIds.has(id)) {
+        mapInstance.current.removeLayer(markerRegistryRef.current[id]);
+        delete markerRegistryRef.current[id];
+      }
+    });
+
+    // Handle Marker Creation and Updates
     places.forEach(place => {
       const isHovered = hoveredPlaceId === place.id;
       const isSelected = selectedRoute.find(p => p.id === place.id);
@@ -615,6 +608,7 @@ const MapComponent = ({
         });
         markerRegistryRef.current[place.id] = marker;
       } else {
+        // Update existing marker styles
         const marker = markerRegistryRef.current[place.id];
         marker.setStyle({ fillColor: markerColor, radius: isHovered ? 9 : 6 });
         if (isHovered || isSelected) marker.bringToFront();
@@ -715,6 +709,8 @@ function App() {
   const [ViewingArticle, setViewingArticle] = useState(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [sharingData, setSharingData] = useState(null);
+  const hasHandledDeepLink = useRef(false);
+
 
   // --- 2. Adventure Engine & Planner State ---
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
@@ -784,44 +780,18 @@ function App() {
   const debouncedPlannerSearch = useDebounce(plannerSearch, 300);
 
 
-  // --- 1. CORE INITIALIZATION & ICON OBSERVER ---
+// --- 1. CORE INITIALIZATION ---
   useEffect(() => {
     const watchId = getUserLocation();
     fetchPlaces();
     fetchInteractions();
     logVisit('Main Page');
 
-    // Initial Lucide icon render
-    if (window.lucide) window.lucide.createIcons();
-
-    // Mobile-Optimized Icon Management (MutationObserver)
-    const targetNode = document.body;
-    let iconTimer;
-
-    const observer = new MutationObserver((mutations) => {
-      const hasNewIcons = mutations.some(mutation =>
-        Array.from(mutation.addedNodes).some(node =>
-          node.nodeType === 1 && (node.querySelector('[data-lucide]') || node.hasAttribute('data-lucide'))
-        )
-      );
-
-      if (hasNewIcons) {
-        clearTimeout(iconTimer);
-        iconTimer = setTimeout(() => {
-          observer.disconnect();
-          if (window.lucide) window.lucide.createIcons();
-          observer.observe(targetNode, { childList: true, subtree: true });
-        }, 50);
-      }
-    });
-
-    observer.observe(targetNode, { childList: true, subtree: true });
-
     return () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
-      observer.disconnect();
-      clearTimeout(iconTimer);
+      
     };
+
   }, []);
 
   // --- 2. UI, SEO & DEEP LINKING ---
@@ -830,50 +800,51 @@ function App() {
     setVisibleCount(20);
   }, [filterTag, debouncedSearch, statusFilter]);
 
-  // Re-render icons specifically for notifications
-  useEffect(() => {
-    if (window.lucide) window.lucide.createIcons();
-  }, [notifications]);
+
 
 // Handle Deep Linking (Opening specific places via URL)
-useEffect(() => {
-  if (places.length > 0) {
-    const urlParams = new URLSearchParams(window.location.search);
-    const placeFromUrl = urlParams.get('place');
+  useEffect(() => {
+    // Only proceed if places are loaded and we haven't already handled the deep link
+    if (places.length > 0 && !hasHandledDeepLink.current) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const placeFromUrl = urlParams.get('place');
 
-    if (placeFromUrl) {
-      const decodedPlaceName = decodeURIComponent(placeFromUrl);
-      const target = places.find(
-        p => p.place_name.toLowerCase() === decodedPlaceName.toLowerCase()
-      );
+      if (placeFromUrl) {
+        const decodedPlaceName = decodeURIComponent(placeFromUrl);
+        const target = places.find(
+          p => p.place_name.toLowerCase() === decodedPlaceName.toLowerCase()
+        );
 
-      if (target) {
-        // Just set the state; the Unified SEO effect below will handle the Title change
-        setViewingArticle(target);
-        setIsArticleOpen(true);
+        if (target) {
+          // Set the state; the Unified SEO effect will handle the Title change
+          setViewingArticle(target);
+          setIsArticleOpen(true);
+        }
       }
+
+      // FIXED: Mark as handled to prevent re-triggering if places array updates
+      hasHandledDeepLink.current = true;
     }
-  }
-}, [places]);
+  }, [places]);
 
-// The single manager for all SEO and Title updates
-useEffect(() => {
-  // 1. Find the place data for the gallery if one is active
-  const activeGalleryPlace = activeId 
-    ? places.find(p => p.id === activeId) 
-    : null;
+  // The single manager for all SEO and Title updates
+  useEffect(() => {
+    // 1. Find the place data for the gallery if one is active
+    const activeGalleryPlace = activeId
+      ? places.find(p => p.id === activeId)
+      : null;
 
-  if (activeGalleryPlace) {
-    // Priority 1: User is looking at the Photo Gallery
-    updateSEO(activeGalleryPlace, true);
-  } else if (isArticleOpen && ViewingArticle) {
-    // Priority 2: User is reading the Article
-    updateSEO(ViewingArticle, false);
-  } else {
-    // Priority 3: User is on the Home Map/List
-    updateSEO(null);
-  }
-}, [activeId, ViewingArticle, isArticleOpen, places]);
+    if (activeGalleryPlace) {
+      // Priority 1: User is looking at the Photo Gallery
+      updateSEO(activeGalleryPlace, true);
+    } else if (isArticleOpen && ViewingArticle) {
+      // Priority 2: User is reading the Article
+      updateSEO(ViewingArticle, false);
+    } else {
+      // Priority 3: User is on the Home Map/List
+      updateSEO(null);
+    }
+  }, [activeId, ViewingArticle, isArticleOpen, places]);
 
   // --- 3. ADD LOCATION LOGIC (CONSOLIDATED & STABILIZED) ---
 
@@ -1142,7 +1113,7 @@ useEffect(() => {
     const isTurningOn = !toggles[type];
     setToggles(prev => ({ ...prev, [type]: isTurningOn }));
 
-    // 1. Handle Turning Off: Remove markers
+    // 1. Handle Turning Off: Remove markers from the map
     if (!isTurningOn) {
       nearbyMarkersRef.current = nearbyMarkersRef.current.filter(item => {
         if (item.type === type) {
@@ -1154,7 +1125,7 @@ useEffect(() => {
       return;
     }
 
-    // 2. Data Bridge Check
+    // 2. Data Bridge Check: Ensure a route exists
     if (!routeData || !routeData.coordinates) {
       showToast("Please plan a route first!", "error");
       setToggles(prev => ({ ...prev, [type]: false }));
@@ -1162,7 +1133,13 @@ useEffect(() => {
     }
 
     try {
+      // 3. Google Maps Fallback Check: Prevent crash if API failed to load
+      if (!window.google || !window.google.maps) {
+        throw new Error("Google Maps API not available. Please check your connection.");
+      }
+
       await google.maps.importLibrary("places");
+      
       // Use the stable PlacesService from index.html
       const service = new google.maps.places.PlacesService(document.createElement('div'));
 
@@ -1180,6 +1157,7 @@ useEffect(() => {
         }, (results, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && mapRef.current) {
             results.forEach(place => {
+              // Quality filter: High ratings and review count
               const isHighQuality = place.rating >= 4.0 && (place.user_ratings_total || 0) >= 20;
               const needsFiltering = type === 'restaurant' || type === 'lodging';
 
@@ -1191,7 +1169,7 @@ useEffect(() => {
                   weight: 2,
                   opacity: 1,
                   fillOpacity: 1
-                }).addTo(mapRef.current) // Successfully adds to the exposed map
+                }).addTo(mapRef.current)
                   .bindPopup(`
                     <div class="p-1 font-sans">
                         <b class="text-slate-900 block">${place.name}</b>
@@ -1211,8 +1189,8 @@ useEffect(() => {
         });
       });
     } catch (e) {
-      console.error(e);
-      showToast("Failed to fetch nearby locations", "error");
+      console.error("Nearby search error:", e);
+      showToast(e.message || "Failed to fetch nearby locations", "error");
       setToggles(prev => ({ ...prev, [type]: false }));
     }
   };
@@ -1227,18 +1205,6 @@ useEffect(() => {
     setToggles({ lodging: false, gas_station: false, restaurant: false });
   };
 
-  // --- Scroll Handler Fix ---
-  const handleScroll = useCallback((e) => {
-
-    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-
-    const isNearBottom = scrollHeight - scrollTop <= clientHeight + 150;
-
-    if (isNearBottom && visibleCount < filteredPlaces.length) {
-      setVisibleCount(prev => prev + 20);
-    }
-
-  }, [visibleCount, filteredPlaces.length]);
 
 
   // 2. Weather Fetching Logic (Optimized for Speed)
@@ -2102,10 +2068,10 @@ useEffect(() => {
       </div>
 
 
-      <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
-        {/* 1. Main Grid: Location Cards & Adsterra */}
+     <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
+        {/* 1. Main Grid: Location Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
-          {displayedPlaces.map(place => (
+          {displayedPlaces.map((place) => (
             <article
               key={place.id}
               className="group relative rounded-[2rem] bg-white border border-slate-100 overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-xl"
@@ -2121,8 +2087,12 @@ useEffect(() => {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                 <div className="absolute top-4 left-4">
-                  <span className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${place.status === 'done' ? 'bg-emerald-500/90 text-white' : 'bg-amber-500/90 text-white'}`}>
-                    {place.status === 'done' ? '✨ Visited' : '⏳ Bucket List'}
+                  <span
+                    className={`px-2 py-1 rounded-lg text-[7px] font-black uppercase tracking-wider shadow-sm ${
+                      place.status === "done" ? "bg-emerald-500/90 text-white" : "bg-amber-500/90 text-white"
+                    }`}
+                  >
+                    {place.status === "done" ? "✨ Visited" : "⏳ Bucket List"}
                   </span>
                 </div>
                 <div className="absolute bottom-3 left-4 pr-4">
@@ -2136,7 +2106,7 @@ useEffect(() => {
                 <div className="flex justify-between items-start mb-1">
                   <div className="flex flex-col min-w-0">
                     <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight truncate">
-                      {place.locality || 'Explore'}
+                      {place.locality || "Explore"}
                     </span>
                   </div>
                   <span className="bg-slate-50 text-slate-500 px-2 py-0.5 rounded border border-slate-100 text-[8px] font-black uppercase shrink-0">
@@ -2144,24 +2114,44 @@ useEffect(() => {
                   </span>
                 </div>
                 <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                  {userCoords ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY` : "Location Access Required"}
+                  {userCoords
+                    ? `${calculateDistance(userCoords.lat, userCoords.lng, place.latitude, place.longitude).toFixed(1)} KM AWAY`
+                    : "Location Access Required"}
                 </div>
 
-                {place.status !== 'pending' && (
+                {place.status !== "pending" && (
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-50">
-                    <button onClick={(e) => { e.stopPropagation(); handleLike(place.id); }} className="flex items-center gap-1.5 group outline-none select-none pr-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLike(place.id);
+                      }}
+                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
+                    >
                       <div className="p-2 rounded-full group-hover:bg-rose-50 transition-colors">
-                        <Heart className={`w-4 h-4 ${likes[place.id] ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
+                        <Heart
+                          className={`w-4 h-4 ${likes[place.id] ? "fill-rose-500 text-rose-500" : "text-slate-400"}`}
+                        />
                       </div>
                       <span className="text-[10px] font-bold text-slate-500">{likes[place.id] || 0}</span>
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); setViewingArticle(place); setIsArticleOpen(true); }} className="flex items-center gap-1.5 group outline-none select-none pr-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingArticle(place);
+                        setIsArticleOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 group outline-none select-none pr-2"
+                    >
                       <div className="p-2 rounded-full group-hover:bg-indigo-50 transition-colors">
                         <MessageCircle className="w-4 h-4 text-slate-400" />
                       </div>
                       <span className="text-[10px] font-bold text-slate-500">{(comments[place.id] || []).length}</span>
                     </button>
-                    <button onClick={(e) => handleShare(e, place)} className="flex items-center gap-1.5 group outline-none select-none">
+                    <button
+                      onClick={(e) => handleShare(e, place)}
+                      className="flex items-center gap-1.5 group outline-none select-none"
+                    >
                       <div className="p-2 rounded-full group-hover:bg-emerald-50 transition-colors">
                         <Share2 className="w-4 h-4 text-slate-400 group-hover:text-emerald-500" />
                       </div>
@@ -2171,19 +2161,35 @@ useEffect(() => {
 
                 <footer className="grid grid-cols-3 gap-2 mt-auto pt-4 border-t border-slate-100/60">
                   {place.google_maps_url && (
-                    <button onClick={() => window.open(place.google_maps_url, '_blank')} className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all border border-slate-100/50">
+                    <button
+                      onClick={() => window.open(place.google_maps_url, "_blank")}
+                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-90 transition-all border border-slate-100/50"
+                    >
                       <MapIcon className="w-6 h-6" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Maps</span>
                     </button>
                   )}
                   {place.album_photos && (
-                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setActiveId(place.id); }} className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100/50">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setActiveId(place.id);
+                      }}
+                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-100/50"
+                    >
                       <ImageIcon className="w-3.5 h-3.5" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Gallery</span>
                     </button>
                   )}
                   {place.ai_article?.story && (
-                    <button onClick={() => { setViewingArticle(place); setIsArticleOpen(true); }} className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100/50">
+                    <button
+                      onClick={() => {
+                        setViewingArticle(place);
+                        setIsArticleOpen(true);
+                      }}
+                      className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100/50"
+                    >
                       <BookOpen className="w-3.5 h-3.5" />
                       <span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Read</span>
                     </button>
@@ -2204,9 +2210,7 @@ useEffect(() => {
 
         {/* 2. THE SENTINEL & LOADING SPINNER */}
         <div ref={sentinelRef} className="w-full flex justify-center items-center py-12">
-          {visibleCount < filteredPlaces.length && (
-            <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />
-          )}
+          {visibleCount < filteredPlaces.length && <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />}
         </div>
 
         {/* 3. GOOGLE AD & FOOTER */}
@@ -2215,7 +2219,10 @@ useEffect(() => {
         </div>
 
         <footer className="py-10 text-center border-t border-slate-100 mt-10">
-          <button onClick={() => setIsPrivacyOpen(true)} className="text-[10px] font-bold text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors">
+          <button
+            onClick={() => setIsPrivacyOpen(true)}
+            className="text-[10px] font-bold text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors"
+          >
             Privacy Policy & Terms
           </button>
           <p className="text-[9px] text-slate-300 uppercase mt-2 font-medium">
@@ -2223,14 +2230,10 @@ useEffect(() => {
           </p>
         </footer>
 
-        {/* 4. SHARE DIALOG (Fixed positioning prevents scroll issues) */}
+        {/* 4. SHARE DIALOG */}
         {isShareModalOpen && sharingData && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-              onClick={() => setIsShareModalOpen(false)}
-            ></div>
-
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsShareModalOpen(false)}></div>
             <div className="relative bg-white w-full max-w-sm rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
               <div className="text-center mb-8">
                 <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -2241,10 +2244,10 @@ useEffect(() => {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* WhatsApp: Supports Text + Link */}
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(sharingData.text + " " + sharingData.url)}`}
-                  target="_blank" rel="noopener noreferrer"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 transition-colors group text-center"
                 >
                   <div className="w-10 h-10 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-110 transition-transform">
@@ -2252,11 +2255,10 @@ useEffect(() => {
                   </div>
                   <span className="text-[9px] font-black text-emerald-700 uppercase tracking-tighter">WhatsApp</span>
                 </a>
-
-                {/* Facebook: ONLY URL (Facebook handles the preview via your SEO tags) */}
                 <a
                   href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(sharingData.url)}`}
-                  target="_blank" rel="noopener noreferrer"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-colors group text-center"
                 >
                   <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
@@ -2264,11 +2266,12 @@ useEffect(() => {
                   </div>
                   <span className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">Facebook</span>
                 </a>
-
-                {/* X (Twitter): Supports Text + Link */}
                 <a
-                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(sharingData.text)}&url=${encodeURIComponent(sharingData.url)}`}
-                  target="_blank" rel="noopener noreferrer"
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(sharingData.text)}&url=${encodeURIComponent(
+                    sharingData.url
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-slate-50 hover:bg-slate-200 transition-colors group text-center"
                 >
                   <div className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center shadow-lg shadow-slate-300 group-hover:scale-110 transition-transform">
@@ -2276,8 +2279,6 @@ useEffect(() => {
                   </div>
                   <span className="text-[9px] font-black text-slate-700 uppercase tracking-tighter">Twitter (X)</span>
                 </a>
-
-                {/* Copy Link: The most reliable way for Instagram/Stories */}
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(sharingData.url);
