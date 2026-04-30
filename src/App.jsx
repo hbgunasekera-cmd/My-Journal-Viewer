@@ -80,10 +80,30 @@ const auditLocationName = (name) => {
   return String(name).replace(/[^a-zA-Z0-9\s\-'\.]/g, '').trim();
 };
 
-const getOptimizedUrl = (url, width, quality = 70) => {
-  if (url?.includes('supabase.co') && !url.includes('?')) {
-    return `${url}?width=${width}&quality=${quality}&format=webp`;
+/**
+ * Consolidates Google and Supabase image optimization logic.
+ * Handles existing dimension strings and query params in Google URLs.
+ */
+const getOptimizedUrl = (url, width = 1000) => {
+  if (!url) return '';
+
+  // 1. Handle Google Content/Photos URLs
+  // Example: https://lh3.googleusercontent.com/pw/AP1G...=w1920-h1080
+  if (url.includes('googleusercontent.com')) {
+    // Strip everything after '=' to remove existing size params
+    // Strip everything after '?' to remove auth/metadata params
+    const baseUrl = url.split('=')[0].split('?')[0];
+    
+    // Append new width (=w) and force WebP conversion (-rw)
+    return `${baseUrl}=w${width}-rw`; 
   }
+
+  // 2. Handle Supabase images
+  if (url.includes('supabase.co')) {
+    return `${url}?width=${width}&quality=70&format=webp`;
+  }
+
+  // Fallback for other sources
   return url;
 };
 
