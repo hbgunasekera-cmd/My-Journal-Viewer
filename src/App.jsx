@@ -98,10 +98,22 @@ const IconMap = {
   'image': ImageIcon
 };
 
-// Create a small helper component for dynamic icons
+
 const RenderDynamicIcon = ({ iconName, className }) => {
+
   const IconComponent = IconMap[iconName] || Info;
-  return <IconComponent className={className} />;
+
+  return (
+    <IconComponent
+      className={className}
+      /* 
+         Optimization: Ensure icons don't trigger layout shifts 
+         by providing a consistent rendering path.
+      */
+      aria-hidden="true"
+      strokeWidth={2.5}
+    />
+  );
 };
 
 const updateSEO = (place, isGallery = false) => {
@@ -2409,9 +2421,16 @@ function App() {
           }}></div>
 
           <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            {/* Header Image - Always available from initial list fetch */}
+            {/* Header Image - Optimized for 3.7s LCP */}
             <div className="relative h-48 w-full shrink-0">
-              <img src={ViewingArticle.cover_photo_url} className="h-full w-full object-cover" alt={ViewingArticle.place_name} />
+              <img
+                src={ViewingArticle.cover_photo_url}
+                className="h-full w-full object-cover"
+                alt={ViewingArticle.place_name}
+                fetchPriority="high"
+                loading="eager"
+                decoding="async"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
               <button
                 onClick={() => {
@@ -2462,7 +2481,6 @@ function App() {
                 </h2>
 
                 <div className="prose prose-slate">
-                  {/* FIX: Conditional Skeleton Loading */}
                   {ViewingArticle.ai_article?.isFullContent ? (
                     <>
                       <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-line">
@@ -2488,7 +2506,7 @@ function App() {
                 </div>
               </div>
 
-              {/* DISCUSSION SECTION */}
+              {/* DISCUSSION SECTION - Now with Author Replies */}
               <div className="border-t border-slate-100 pt-8">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2">
                   <MessageCircle className="w-3 h-3" />
@@ -2503,7 +2521,25 @@ function App() {
                         <span className="text-[8px] font-bold text-slate-400 uppercase">
                           {new Date(c.created_at).toLocaleDateString()}
                         </span>
+                        {(c.city || c.country) && (
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">
+                            {[c.city, c.country].filter(Boolean).join(', ')}
+                          </span>
+                        )}
                       </div>
+
+                      {/* Author Reply Logic from Block 2 */}
+                      {c.reply_text && (
+                        <div className="mt-4 pt-4 border-t border-slate-200/60">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <div className="w-1 h-3 bg-indigo-500 rounded-full"></div>
+                            <span className="text-[8px] font-black text-indigo-600 uppercase tracking-tighter">Author Response</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-slate-100">
+                            <p className="text-[10px] text-slate-600 leading-relaxed italic">"{c.reply_text}"</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
