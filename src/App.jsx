@@ -34,25 +34,25 @@ if (typeof window !== 'undefined') {
  */
 const RestrictionBadge = ({ level }) => {
   const config = {
-    'Open': { 
-      color: 'text-green-500 bg-green-50', 
-      icon: <CheckCircle2 size={14} />, 
-      label: 'Public Access' 
+    'Open': {
+      color: 'text-green-500 bg-green-50',
+      icon: <CheckCircle2 size={14} />,
+      label: 'Public Access'
     },
-    'Permit Required': { 
-      color: 'text-orange-600 bg-orange-50', 
-      icon: <AlertCircle size={14} />, 
-      label: 'Permit Needed (DWC/Forest Dept)' 
+    'Permit Required': {
+      color: 'text-orange-600 bg-orange-50',
+      icon: <AlertCircle size={14} />,
+      label: 'Permit Needed (DWC/Forest Dept)'
     },
-    'Guide Mandatory': { 
-      color: 'text-blue-600 bg-blue-50', 
-      icon: <UserCheck size={14} />, 
-      label: 'Local Guide Required' 
+    'Guide Mandatory': {
+      color: 'text-blue-600 bg-blue-50',
+      icon: <UserCheck size={14} />,
+      label: 'Local Guide Required'
     },
-    'Restricted': { 
-      color: 'text-red-600 bg-red-50', 
-      icon: <Lock size={14} />, 
-      label: 'High Security / Restricted' 
+    'Restricted': {
+      color: 'text-red-600 bg-red-50',
+      icon: <Lock size={14} />,
+      label: 'High Security / Restricted'
     },
   };
 
@@ -133,9 +133,9 @@ const getOptimizedUrl = (url, width = 1000) => {
     // Strip everything after '=' to remove existing size params
     // Strip everything after '?' to remove auth/metadata params
     const baseUrl = url.split('=')[0].split('?')[0];
-    
+
     // Append new width (=w) and force WebP conversion (-rw)
-    return `${baseUrl}=w${width}-rw`; 
+    return `${baseUrl}=w${width}-rw`;
   }
 
   // 2. Handle Supabase images
@@ -1167,7 +1167,6 @@ function App() {
 
   const fetchPlaces = useCallback(async () => {
     try {
-
       const { data, error } = await supabaseClient
         .from('travel_bucket_list')
         .select(`
@@ -1181,18 +1180,22 @@ function App() {
         longitude, 
         google_maps_url, 
         album_photos,
+        restriction_level,
+        governing_org,
         ai_article_preview:ai_article->story 
       `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      // Map the preview to keep the UI compatible
+
       const optimizedData = data.map(p => ({
         ...p,
+        // Ensure restriction_level is explicitly included in the state
+        restriction_level: p.restriction_level || 'Open',
         hasArticle: !!p.ai_article_preview,
-        // Store a short snippet for the card, fetch full on click
         ai_article: p.ai_article_preview ? { story: p.ai_article_preview.substring(0, 100) } : null
       }));
+
       setPlaces(optimizedData);
     } catch (err) {
       console.error("Fetch Error:", err.message);
@@ -1640,6 +1643,14 @@ function App() {
   };
 
   const toggleRoutePlace = (place) => {
+    // --- ADDED TRIGGER START ---
+    // Only show the safety note if it's NOT an "Open" location
+    const isSelected = selectedRoute.find(p => p.id === place.id);
+    if (!isSelected && place.restriction_level && place.restriction_level !== 'Open') {
+      handleViewLocation(place);
+    }
+    // --- ADDED TRIGGER END ---
+
     setSelectedRoute(prev => {
       // 1. Add or remove the place from the selection pool
       const isSelected = prev.find(p => p.id === place.id);
@@ -1648,13 +1659,11 @@ function App() {
         : [...prev, place];
 
       if (selectionPool.length === 0) return [];
-      if (!userCoords) return selectionPool; // Fallback if GPS is off
+      if (!userCoords) return selectionPool;
 
-      // 2. Sequential Reordering (Nearest Neighbor)
+      // 2. Sequential Reordering (Nearest Neighbor Logic continues...)
       const optimizedRoute = [];
       let remainingOptions = [...selectionPool];
-
-      // Always start the calculation from the user's current position
       let currentPoint = { lat: userCoords.lat, lng: userCoords.lng };
 
       while (remainingOptions.length > 0) {
@@ -1675,11 +1684,8 @@ function App() {
           }
         }
 
-        // Move the closest location found to the optimized list
         const nextStop = remainingOptions.splice(nearestIndex, 1)[0];
         optimizedRoute.push(nextStop);
-
-        // Update current point to the location we just "arrived" at
         currentPoint = { lat: nextStop.latitude, lng: nextStop.longitude };
       }
 
@@ -1848,6 +1854,14 @@ function App() {
   };
 
 
+  const handleViewLocation = (location) => {
+    setSelectedLocation(location);
+    // Automatically show modal for restricted areas
+    if (location.restriction_level !== 'Open') {
+      setShowSafetyModal(true);
+    }
+  };
+
 
   const handleAddPlace = async (e) => {
     e.preventDefault();
@@ -2009,57 +2023,57 @@ function App() {
 
 
   const SafetyOverlay = ({ location, isOpen, onClose }) => {
-  if (!isOpen || !location) return null;
+    if (!isOpen || !location) return null;
 
-  // Only show detailed warnings for non-public areas
-  const isHighRisk = location.restriction_level !== 'Open';
+    // Only show detailed warnings for non-public areas
+    const isHighRisk = location.restriction_level !== 'Open';
 
-  return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
-        <div className={`p-4 flex items-center justify-between ${isHighRisk ? 'bg-orange-500' : 'bg-blue-600'} text-white`}>
-          <div className="flex items-center gap-2">
-            <AlertCircle size={20} />
-            <span className="font-bold uppercase text-sm tracking-tight">Location Safety Brief</span>
-          </div>
-          <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-slate-800 mb-2">{location.name}</h2>
-          <RestrictionBadge level={location.restriction_level} />
-          
-          <div className="mt-4 space-y-3 text-sm text-slate-600">
-            <p className="flex gap-2">
-              <InfoIcon size={16} className="shrink-0 text-blue-500" />
-              <span>{location.description || "No specific trail notes available for this location."}</span>
-            </p>
-            
-            {isHighRisk && (
-              <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-orange-800">
-                <p className="font-bold mb-1">Required Action:</p>
-                <p>You must obtain a permit from the relevant Forest Range Office or DWC before entry[cite: 1].</p>
-              </div>
-            )}
-            
-            <p className="text-[10px] italic opacity-60 mt-4 pt-4 border-t">
-              By proceeding, you acknowledge that trail conditions can change and you are responsible for your own safety[cite: 1].
-            </p>
+    return (
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
+          <div className={`p-4 flex items-center justify-between ${isHighRisk ? 'bg-orange-500' : 'bg-blue-600'} text-white`}>
+            <div className="flex items-center gap-2">
+              <AlertCircle size={20} />
+              <span className="font-bold uppercase text-sm tracking-tight">Location Safety Brief</span>
+            </div>
+            <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full transition-colors">
+              <X size={20} />
+            </button>
           </div>
 
-          <button 
-            onClick={onClose}
-            className="w-full mt-6 bg-slate-900 text-white py-3 rounded-xl font-semibold hover:bg-slate-800 transition-all"
-          >
-            I Understand, View Map
-          </button>
+          <div className="p-6">
+            <h2 className="text-xl font-bold text-slate-800 mb-2">{location.name}</h2>
+            <RestrictionBadge level={location.restriction_level} />
+
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <p className="flex gap-2">
+                <InfoIcon size={16} className="shrink-0 text-blue-500" />
+                <span>{location.description || "No specific trail notes available for this location."}</span>
+              </p>
+
+              {isHighRisk && (
+                <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-orange-800">
+                  <p className="font-bold mb-1">Required Action:</p>
+                  <p>You must obtain a permit from the relevant Forest Range Office or DWC before entry[cite: 1].</p>
+                </div>
+              )}
+
+              <p className="text-[10px] italic opacity-60 mt-4 pt-4 border-t">
+                By proceeding, you acknowledge that trail conditions can change and you are responsible for your own safety[cite: 1].
+              </p>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="w-full mt-6 bg-slate-900 text-white py-3 rounded-xl font-semibold hover:bg-slate-800 transition-all"
+            >
+              I Understand, View Map
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   const PrivacyModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
@@ -2122,41 +2136,41 @@ function App() {
  * GeneralDisclaimer Component
  * Provides legal protection regarding safety, accuracy, and liability.
  */
-const GeneralDisclaimer = () => {
-  return (
-    <div className="bg-gray-50 border-l-4 border-amber-500 p-6 my-8 rounded-r-lg shadow-sm">
-      <div className="flex items-center gap-2 mb-3 text-amber-700">
-        <AlertCircle size={20} />
-        <h3 className="font-bold uppercase tracking-wide text-sm">Legal Disclaimer & Safety Warning</h3>
-      </div>
-      
-      <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
-        <p>
-          <strong>1. Assumption of Risk:</strong> The hiking trails, waterfalls, and archaeological sites 
-          featured on <em>My Journal</em> involve inherent physical risks. Users assume full 
-          responsibility for their personal safety, equipment, and insurance while visiting these locations.
-        </p>
-        
-        <p>
-          <strong>2. Information Accuracy:</strong> While we strive for accuracy, trail conditions, 
-          weather patterns in the Central Province, and access permissions can change without notice. 
-          Always verify local conditions before your journey.
-        </p>
+  const GeneralDisclaimer = () => {
+    return (
+      <div className="bg-gray-50 border-l-4 border-amber-500 p-6 my-8 rounded-r-lg shadow-sm">
+        <div className="flex items-center gap-2 mb-3 text-amber-700">
+          <AlertCircle size={20} />
+          <h3 className="font-bold uppercase tracking-wide text-sm">Legal Disclaimer & Safety Warning</h3>
+        </div>
 
-        <p>
-          <strong>3. Drone Operations:</strong> Drone pilots must adhere to all Civil Aviation Authority 
-          of Sri Lanka (CAASL) regulations[cite: 1]. Flying in National Parks or High-Security Zones without 
-          explicit Ministry of Defence (MOD) and DWC clearance is strictly prohibited[cite: 1].
-        </p>
-        
-        <p>
-          <strong>4. No Liability:</strong> Hasitha Gunasekera and <em>My Journal</em> are not liable 
-          for any injuries, legal penalties, or damages resulting from the use of information provided on this platform.
-        </p>
+        <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
+          <p>
+            <strong>1. Assumption of Risk:</strong> The hiking trails, waterfalls, and archaeological sites
+            featured on <em>My Journal</em> involve inherent physical risks. Users assume full
+            responsibility for their personal safety, equipment, and insurance while visiting these locations.
+          </p>
+
+          <p>
+            <strong>2. Information Accuracy:</strong> While we strive for accuracy, trail conditions,
+            weather patterns in the Central Province, and access permissions can change without notice.
+            Always verify local conditions before your journey.
+          </p>
+
+          <p>
+            <strong>3. Drone Operations:</strong> Drone pilots must adhere to all Civil Aviation Authority
+            of Sri Lanka (CAASL) regulations[cite: 1]. Flying in National Parks or High-Security Zones without
+            explicit Ministry of Defence (MOD) and DWC clearance is strictly prohibited[cite: 1].
+          </p>
+
+          <p>
+            <strong>4. No Liability:</strong> Hasitha Gunasekera and <em>My Journal</em> are not liable
+            for any injuries, legal penalties, or damages resulting from the use of information provided on this platform.
+          </p>
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   const clearSelectedRoute = () => {
     if (window.confirm("Are you sure you want to clear all selected locations?")) {
@@ -2457,77 +2471,79 @@ const GeneralDisclaimer = () => {
             })
           )}
 
-        {/* 3. ADSTERRA GRID ITEM: Height locked to prevent shifting when the script finishes execution */}
-        <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex flex-col items-center justify-center p-4 min-h-[450px]">
-          <div id="container-023accb7675231a6241cd0771cc13617" className="w-full flex-1 flex items-center justify-center min-h-[250px]">
-            {/* Script injects content here; the min-h ensures the container doesn't start at 0px */}
-          </div>
-          <div className="absolute top-4 right-4">
-            <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. INFINITE SCROLL SENTINEL */}
-      <div ref={sentinelRef} className="w-full flex justify-center items-center py-12">
-        {visibleCount < filteredPlaces.length && <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />}
-      </div>
-
-      {/* 3. GOOGLE AD & EXPANDED LEGAL FOOTER */}
-      <div className="w-full max-w-5xl mx-auto px-4 min-h-[100px] mb-10">
-        <GoogleBottomAd />
-      </div>
-
-      <footer className="py-12 border-t border-slate-100 bg-slate-50/30">
-        <div className="max-w-6xl mx-auto px-6">
-          {/* Two Columns for Safety and Drone Policy */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left mb-10">
-            {/* Column 1: General Safety Disclaimer */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-slate-900">
-                <AlertCircle size={14} className="text-amber-500" />
-                <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Safety & Liability Disclaimer</h4>
-              </div>
-              <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                Trekking, hiking, and exploring remote areas in Sri Lanka involve inherent risks[cite: 1]. 
-                Information on <em>My Journal</em> is for reference only; trail conditions, weather, and access 
-                permissions can change without notice[cite: 1]. Users are responsible for their own safety, 
-                equipment, and insurance[cite: 1].
-              </p>
+          {/* 3. ADSTERRA GRID ITEM: Height locked to prevent shifting when the script finishes execution */}
+          <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex flex-col items-center justify-center p-4 min-h-[450px]">
+            <div id="container-023accb7675231a6241cd0771cc13617" className="w-full flex-1 flex items-center justify-center min-h-[250px]">
+              {/* Script injects content here; the min-h ensures the container doesn't start at 0px */}
             </div>
-
-            {/* Column 2: Drone Policy */}
-            <div className="md:border-l md:border-slate-200 md:pl-10 space-y-4">
-              <div className="flex items-center gap-2 text-slate-900">
-                <Video size={14} className="text-indigo-500" />
-                <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Drone & Content Policy</h4>
-              </div>
-              <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                All drone footage is captured in compliance with CAASL regulations[cite: 1]. 
-                Flying in National Parks or High-Security Zones without Ministry of Defence and 
-                DWC permits is strictly prohibited[cite: 1].
-              </p>
+            <div className="absolute top-4 right-4">
+              <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
             </div>
           </div>
-
-          {/* Privacy Policy & Terms - Centered Below Columns */}
-          <div className="flex justify-center border-t border-slate-100 pt-8">
-            <button
-              onClick={() => setIsPrivacyOpen(true)}
-              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-widest transition-colors px-6 py-2 bg-white rounded-full border border-slate-200 shadow-sm hover:shadow-md"
-            >
-              Privacy Policy & Terms
-            </button>
-          </div>
-
-          {/* Copyright Section */}
-          <div className="mt-8 text-center">
-            <p className="text-[9px] text-slate-300 uppercase font-medium tracking-widest">
-              © {new Date().getFullYear()} My Journal by Hasitha Gunasekera
-            </p>
-          </div>
         </div>
-      </footer>
+
+        {/* 2. INFINITE SCROLL SENTINEL */}
+        <div ref={sentinelRef} className="w-full flex justify-center items-center py-12">
+          {visibleCount < filteredPlaces.length && <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />}
+        </div>
+
+        {/* 3. GOOGLE AD & EXPANDED LEGAL FOOTER */}
+        <div className="w-full max-w-5xl mx-auto px-4 min-h-[100px] mb-10">
+          <GoogleBottomAd />
+        </div>
+
+        <footer className="py-12 border-t border-slate-100 bg-slate-50/30">
+          <div className="max-w-6xl mx-auto px-6">
+            {/* Two Columns for Safety and Drone Policy */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left mb-10">
+              {/* Column 1: General Safety Disclaimer */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-slate-900">
+                  <AlertCircle size={14} className="text-amber-500" />
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Safety & Liability Disclaimer</h4>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                  Trekking, hiking, and exploring remote areas in Sri Lanka involve inherent risks[cite: 1].
+                  Information on <em>My Journal</em> is for reference only; trail conditions, weather, and access
+                  permissions can change without notice[cite: 1]. Users are responsible for their own safety,
+                  equipment, and insurance[cite: 1].
+                </p>
+              </div>
+
+              {/* Column 2: Drone Policy */}
+              <div className="md:border-l md:border-slate-200 md:pl-10 space-y-4">
+                <div className="flex items-center gap-2 text-slate-900">
+                  <Video size={14} className="text-indigo-500" />
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Drone & Content Policy</h4>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                  All drone footage is captured in compliance with CAASL regulations[cite: 1].
+                  Flying in National Parks or High-Security Zones without Ministry of Defence and
+                  DWC permits is strictly prohibited[cite: 1].
+                </p>
+              </div>
+            </div>
+
+            {/* Privacy Policy & Terms - Centered Below Columns */}
+            <div className="flex justify-center border-t border-slate-100 pt-8">
+              <button
+                onClick={() => setIsPrivacyOpen(true)}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-widest transition-colors px-6 py-2 bg-white rounded-full border border-slate-200 shadow-sm hover:shadow-md"
+              >
+                Privacy Policy & Terms
+              </button>
+            </div>
+
+            {/* Copyright Section */}
+            <div className="mt-8 text-center">
+              <p className="text-[9px] text-slate-300 uppercase font-medium tracking-widest">
+                © {new Date().getFullYear()} My Journal by Hasitha Gunasekera
+              </p>
+            </div>
+          </div>
+        </footer>
+
+
 
         {/* 4. SHARE DIALOG SYSTEM maintained */}
         {isShareModalOpen && sharingData && (
@@ -2687,6 +2703,34 @@ const GeneralDisclaimer = () => {
                       {ViewingArticle.ai_article.specs && (
                         <div className="mt-6 p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100 italic">
                           <h4 className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Technical Specs & Access</h4>
+
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            {/* Revised Permission & Access Badge */}
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border ${ViewingArticle.restriction_level === 'Restricted' || ViewingArticle.restriction_level === 'High'
+                                ? 'bg-rose-100 text-rose-600 border-rose-200'
+                                : ViewingArticle.restriction_level === 'Low'
+                                  ? 'bg-amber-100 text-amber-600 border-amber-200'
+                                  : 'bg-blue-100 text-blue-600 border-blue-200'
+                              }`}>
+                              {ViewingArticle.restriction_level === 'Restricted' && 'Strictly Restricted'}
+                              {ViewingArticle.restriction_level === 'High' && 'Permit / Ticket Required'}
+                              {ViewingArticle.restriction_level === 'Low' && 'Local Access / Fees Apply'}
+                              {ViewingArticle.restriction_level === 'None' && 'Standard Public Access'}
+                            </span>
+
+                            {/* Authority Display Logic */}
+                            <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1">
+                              •
+                              <span className="text-slate-500">
+                                {ViewingArticle.governing_org === 'Open'
+                                  ? "Public Land (No official counter)"
+                                  : ViewingArticle.governing_org === 'Local Authorities'
+                                    ? "Managed by Local Authorities"
+                                    : ViewingArticle.governing_org}
+                              </span>
+                            </span>
+                          </div>
+
                           <p className="text-[11px] text-slate-500 leading-normal">
                             {ViewingArticle.ai_article.specs}
                           </p>
