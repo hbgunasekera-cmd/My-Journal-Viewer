@@ -853,6 +853,11 @@ function App() {
   const debouncedSearch = useDebounce(searchTerm, 300);
   const debouncedPlannerSearch = useDebounce(plannerSearch, 300);
 
+  // --- 10. Saftey Notes ---
+
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
+
 
   // --- 1. CORE INITIALIZATION ---
   useEffect(() => {
@@ -2002,6 +2007,60 @@ function App() {
     }
   }, []);
 
+
+  const SafetyOverlay = ({ location, isOpen, onClose }) => {
+  if (!isOpen || !location) return null;
+
+  // Only show detailed warnings for non-public areas
+  const isHighRisk = location.restriction_level !== 'Open';
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
+        <div className={`p-4 flex items-center justify-between ${isHighRisk ? 'bg-orange-500' : 'bg-blue-600'} text-white`}>
+          <div className="flex items-center gap-2">
+            <AlertCircle size={20} />
+            <span className="font-bold uppercase text-sm tracking-tight">Location Safety Brief</span>
+          </div>
+          <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-slate-800 mb-2">{location.name}</h2>
+          <RestrictionBadge level={location.restriction_level} />
+          
+          <div className="mt-4 space-y-3 text-sm text-slate-600">
+            <p className="flex gap-2">
+              <InfoIcon size={16} className="shrink-0 text-blue-500" />
+              <span>{location.description || "No specific trail notes available for this location."}</span>
+            </p>
+            
+            {isHighRisk && (
+              <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-orange-800">
+                <p className="font-bold mb-1">Required Action:</p>
+                <p>You must obtain a permit from the relevant Forest Range Office or DWC before entry[cite: 1].</p>
+              </div>
+            )}
+            
+            <p className="text-[10px] italic opacity-60 mt-4 pt-4 border-t">
+              By proceeding, you acknowledge that trail conditions can change and you are responsible for your own safety[cite: 1].
+            </p>
+          </div>
+
+          <button 
+            onClick={onClose}
+            className="w-full mt-6 bg-slate-900 text-white py-3 rounded-xl font-semibold hover:bg-slate-800 transition-all"
+          >
+            I Understand, View Map
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
   const PrivacyModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
@@ -2444,7 +2503,7 @@ const GeneralDisclaimer = () => {
                 <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Drone & Content Policy</h4>
               </div>
               <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                All DJI Neo 2 footage is captured in compliance with CAASL regulations[cite: 1]. 
+                All drone footage is captured in compliance with CAASL regulations[cite: 1]. 
                 Flying in National Parks or High-Security Zones without Ministry of Defence and 
                 DWC permits is strictly prohibited[cite: 1].
               </p>
