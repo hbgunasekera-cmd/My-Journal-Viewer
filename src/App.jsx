@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { createRoot } from 'react-dom/client';
-import { QRCodeSVG } from 'qrcode.react'; // <--- Added this line
+import { QRCodeSVG } from 'qrcode.react';
 
 // --- Leaflet Imports ---
 import L from 'leaflet';
@@ -15,7 +15,7 @@ import {
   Image as ImageIcon, BookOpen, MapPin, Send,
   Navigation, RefreshCw, Search, Minus, QrCode, AlertCircle,
   Camera, Video, Info, Map as MapIcon,
-  X, CheckCircle2, Info as InfoIcon
+  X, CheckCircle2, Info as InfoIcon, Lock, UserCheck
 } from 'lucide-react';
 
 // --- Leaflet Marker Fix ---
@@ -27,6 +27,46 @@ if (typeof window !== 'undefined') {
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
   });
 }
+
+/**
+ * RestrictionBadge Component
+ * Handles the visual feedback for the 'restriction_level' column in travel_bucket_list
+ */
+const RestrictionBadge = ({ level }) => {
+  const config = {
+    'Open': { 
+      color: 'text-green-500 bg-green-50', 
+      icon: <CheckCircle2 size={14} />, 
+      label: 'Public Access' 
+    },
+    'Permit Required': { 
+      color: 'text-orange-600 bg-orange-50', 
+      icon: <AlertCircle size={14} />, 
+      label: 'Permit Needed (DWC/Forest Dept)' 
+    },
+    'Guide Mandatory': { 
+      color: 'text-blue-600 bg-blue-50', 
+      icon: <UserCheck size={14} />, 
+      label: 'Local Guide Required' 
+    },
+    'Restricted': { 
+      color: 'text-red-600 bg-red-50', 
+      icon: <Lock size={14} />, 
+      label: 'High Security / Restricted' 
+    },
+  };
+
+  const { color, icon, label } = config[level] || config['Open'];
+
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-semibold ${color}`}>
+      {icon}
+      <span>{label}</span>
+    </div>
+  );
+};
+
+export { RestrictionBadge };
 
 // Configuration
 const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
@@ -2019,6 +2059,46 @@ function App() {
     );
   };
 
+  /**
+ * GeneralDisclaimer Component
+ * Provides legal protection regarding safety, accuracy, and liability.
+ */
+const GeneralDisclaimer = () => {
+  return (
+    <div className="bg-gray-50 border-l-4 border-amber-500 p-6 my-8 rounded-r-lg shadow-sm">
+      <div className="flex items-center gap-2 mb-3 text-amber-700">
+        <AlertCircle size={20} />
+        <h3 className="font-bold uppercase tracking-wide text-sm">Legal Disclaimer & Safety Warning</h3>
+      </div>
+      
+      <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
+        <p>
+          <strong>1. Assumption of Risk:</strong> The hiking trails, waterfalls, and archaeological sites 
+          featured on <em>My Journal</em> involve inherent physical risks. Users assume full 
+          responsibility for their personal safety, equipment, and insurance while visiting these locations.
+        </p>
+        
+        <p>
+          <strong>2. Information Accuracy:</strong> While we strive for accuracy, trail conditions, 
+          weather patterns in the Central Province, and access permissions can change without notice. 
+          Always verify local conditions before your journey.
+        </p>
+
+        <p>
+          <strong>3. Drone Operations:</strong> Drone pilots must adhere to all Civil Aviation Authority 
+          of Sri Lanka (CAASL) regulations[cite: 1]. Flying in National Parks or High-Security Zones without 
+          explicit Ministry of Defence (MOD) and DWC clearance is strictly prohibited[cite: 1].
+        </p>
+        
+        <p>
+          <strong>4. No Liability:</strong> Hasitha Gunasekera and <em>My Journal</em> are not liable 
+          for any injuries, legal penalties, or damages resulting from the use of information provided on this platform.
+        </p>
+      </div>
+    </div>
+  );
+};
+
   const clearSelectedRoute = () => {
     if (window.confirm("Are you sure you want to clear all selected locations?")) {
       setSelectedRoute([]);
@@ -2318,38 +2398,77 @@ function App() {
             })
           )}
 
-          {/* 3. ADSTERRA GRID ITEM: Height locked to prevent shifting when the script finishes execution */}
-          <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex flex-col items-center justify-center p-4 min-h-[450px]">
-            <div id="container-023accb7675231a6241cd0771cc13617" className="w-full flex-1 flex items-center justify-center min-h-[250px]">
-              {/* Script injects content here; the min-h ensures the container doesn't start at 0px */}
-            </div>
-            <div className="absolute top-4 right-4">
-              <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
-            </div>
+        {/* 3. ADSTERRA GRID ITEM: Height locked to prevent shifting when the script finishes execution */}
+        <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex flex-col items-center justify-center p-4 min-h-[450px]">
+          <div id="container-023accb7675231a6241cd0771cc13617" className="w-full flex-1 flex items-center justify-center min-h-[250px]">
+            {/* Script injects content here; the min-h ensures the container doesn't start at 0px */}
+          </div>
+          <div className="absolute top-4 right-4">
+            <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
           </div>
         </div>
+      </div>
 
-        {/* 2. INFINITE SCROLL SENTINEL */}
-        <div ref={sentinelRef} className="w-full flex justify-center items-center py-12">
-          {visibleCount < filteredPlaces.length && <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />}
+      {/* 2. INFINITE SCROLL SENTINEL */}
+      <div ref={sentinelRef} className="w-full flex justify-center items-center py-12">
+        {visibleCount < filteredPlaces.length && <RefreshCw className="w-6 h-6 animate-spin text-slate-300" />}
+      </div>
+
+      {/* 3. GOOGLE AD & EXPANDED LEGAL FOOTER */}
+      <div className="w-full max-w-5xl mx-auto px-4 min-h-[100px] mb-10">
+        <GoogleBottomAd />
+      </div>
+
+      <footer className="py-12 border-t border-slate-100 bg-slate-50/30">
+        <div className="max-w-6xl mx-auto px-6">
+          {/* Two Columns for Safety and Drone Policy */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left mb-10">
+            {/* Column 1: General Safety Disclaimer */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-slate-900">
+                <AlertCircle size={14} className="text-amber-500" />
+                <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Safety & Liability Disclaimer</h4>
+              </div>
+              <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                Trekking, hiking, and exploring remote areas in Sri Lanka involve inherent risks[cite: 1]. 
+                Information on <em>My Journal</em> is for reference only; trail conditions, weather, and access 
+                permissions can change without notice[cite: 1]. Users are responsible for their own safety, 
+                equipment, and insurance[cite: 1].
+              </p>
+            </div>
+
+            {/* Column 2: Drone Policy */}
+            <div className="md:border-l md:border-slate-200 md:pl-10 space-y-4">
+              <div className="flex items-center gap-2 text-slate-900">
+                <Video size={14} className="text-indigo-500" />
+                <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Drone & Content Policy</h4>
+              </div>
+              <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                All DJI Neo 2 footage is captured in compliance with CAASL regulations[cite: 1]. 
+                Flying in National Parks or High-Security Zones without Ministry of Defence and 
+                DWC permits is strictly prohibited[cite: 1].
+              </p>
+            </div>
+          </div>
+
+          {/* Privacy Policy & Terms - Centered Below Columns */}
+          <div className="flex justify-center border-t border-slate-100 pt-8">
+            <button
+              onClick={() => setIsPrivacyOpen(true)}
+              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-widest transition-colors px-6 py-2 bg-white rounded-full border border-slate-200 shadow-sm hover:shadow-md"
+            >
+              Privacy Policy & Terms
+            </button>
+          </div>
+
+          {/* Copyright Section */}
+          <div className="mt-8 text-center">
+            <p className="text-[9px] text-slate-300 uppercase font-medium tracking-widest">
+              © {new Date().getFullYear()} My Journal by Hasitha Gunasekera
+            </p>
+          </div>
         </div>
-
-        {/* 3. GOOGLE AD & FOOTER */}
-        <div className="w-full max-w-5xl mx-auto px-4 min-h-[100px]">
-          <GoogleBottomAd />
-        </div>
-
-        <footer className="py-10 text-center border-t border-slate-100 mt-10">
-          <button
-            onClick={() => setIsPrivacyOpen(true)}
-            className="text-[10px] font-bold text-slate-400 hover:text-indigo-500 uppercase tracking-widest transition-colors"
-          >
-            Privacy Policy & Terms
-          </button>
-          <p className="text-[9px] text-slate-300 uppercase mt-2 font-medium">
-            © {new Date().getFullYear()} My Journal by Hasitha Gunasekera
-          </p>
-        </footer>
+      </footer>
 
         {/* 4. SHARE DIALOG SYSTEM maintained */}
         {isShareModalOpen && sharingData && (
