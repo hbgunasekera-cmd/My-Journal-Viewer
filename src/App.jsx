@@ -2021,27 +2021,6 @@ function App() {
 
 
 
-/*
-  // --- Advertisement Loader ---
-  // This block was previously used to load Adsterra ads. 
-  // Commented out to prevent database request interference (Status 0 errors).
-  useEffect(() => {
-    // Check if the script is already present to avoid multiple loads
-    const scriptId = 'adsterra-invoke-script';
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.async = true;
-      script.dataset.cfasync = "false";
-      script.src = "https://pl29174284.profitablecpmratenetwork.com/023accb7675231a6241cd0771cc13617/invoke.js";
-
-      // Append to head or body
-      document.body.appendChild(script);
-    }
-  }, []);
-*/
-
-
   const SafetyOverlay = ({ location, isOpen, onClose }) => {
     if (!isOpen || !location) return null;
 
@@ -2366,6 +2345,7 @@ function App() {
 
 
       <div className="flex-1 overflow-y-auto px-4 md:px-10 pb-20 scrollable-list">
+
         {/* 1. Main Grid: Location Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 pt-2">
           {/* 1. SKELETON STATE: Prevents CLS by reserving space while 'places' is empty/loading */}
@@ -2492,7 +2472,7 @@ function App() {
                       {place.ai_article?.story && (
                         <button
                           onClick={(e) => {
-                            e.stopPropagation(); // Prevents triggering the card's main click event
+                            e.stopPropagation();
                             handleOpenArticle(place);
                           }}
                           className="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100/50"
@@ -2507,16 +2487,6 @@ function App() {
               );
             })
           )}
-
-          {/* 3. ADSTERRA GRID ITEM: Height locked to prevent shifting when the script finishes execution */}
-          <div className="group relative rounded-[2rem] bg-slate-50/50 border border-dashed border-slate-200 overflow-hidden flex flex-col items-center justify-center p-4 min-h-[450px]">
-            <div id="container-023accb7675231a6241cd0771cc13617" className="w-full flex-1 flex items-center justify-center min-h-[250px]">
-              {/* Script injects content here; the min-h ensures the container doesn't start at 0px */}
-            </div>
-            <div className="absolute top-4 right-4">
-              <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Sponsored</span>
-            </div>
-          </div>
         </div>
 
         {/* 2. INFINITE SCROLL SENTINEL */}
@@ -2531,37 +2501,33 @@ function App() {
 
         <footer className="py-12 border-t border-slate-100 bg-slate-50/30">
           <div className="max-w-6xl mx-auto px-6">
-            {/* Two Columns for Safety and Drone Policy */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10 text-left mb-10">
-              {/* Column 1: General Safety Disclaimer */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-slate-900">
                   <AlertCircle size={14} className="text-amber-500" />
                   <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Safety & Liability Disclaimer</h4>
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                  Trekking, hiking, and exploring remote areas in Sri Lanka involve inherent risks[cite: 1].
+                  Trekking, hiking, and exploring remote areas in Sri Lanka involve inherent risks.
                   Information on <em>My Journal</em> is for reference only; trail conditions, weather, and access
-                  permissions can change without notice[cite: 1]. Users are responsible for their own safety,
-                  equipment, and insurance[cite: 1].
+                  permissions can change without notice. Users are responsible for their own safety,
+                  equipment, and insurance.
                 </p>
               </div>
 
-              {/* Column 2: Drone Policy */}
               <div className="md:border-l md:border-slate-200 md:pl-10 space-y-4">
                 <div className="flex items-center gap-2 text-slate-900">
                   <Video size={14} className="text-indigo-500" />
                   <h4 className="text-[11px] font-black uppercase tracking-[0.2em]">Drone & Content Policy</h4>
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                  All drone footage is captured in compliance with CAASL regulations[cite: 1].
+                  All drone footage is captured in compliance with CAASL regulations.
                   Flying in National Parks or High-Security Zones without Ministry of Defence and
-                  DWC permits is strictly prohibited[cite: 1].
+                  DWC permits is strictly prohibited.
                 </p>
               </div>
             </div>
 
-            {/* Privacy Policy & Terms - Centered Below Columns */}
             <div className="flex justify-center border-t border-slate-100 pt-8">
               <button
                 onClick={() => setIsPrivacyOpen(true)}
@@ -2571,7 +2537,6 @@ function App() {
               </button>
             </div>
 
-            {/* Copyright Section */}
             <div className="mt-8 text-center">
               <p className="text-[9px] text-slate-300 uppercase font-medium tracking-widest">
                 © {new Date().getFullYear()} My Journal by Hasitha Gunasekera
@@ -2579,8 +2544,6 @@ function App() {
             </div>
           </div>
         </footer>
-
-
 
         {/* 4. SHARE DIALOG SYSTEM maintained */}
         {isShareModalOpen && sharingData && (
