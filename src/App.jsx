@@ -15,7 +15,7 @@ import {
   Image as ImageIcon, BookOpen, MapPin, Send,
   Navigation, RefreshCw, Search, Minus, QrCode, AlertCircle,
   Camera, Video, Info, Map as MapIcon,
-  X, CheckCircle2, Info as InfoIcon, Lock, UserCheck
+  X, CheckCircle2, Lock, UserCheck, ShieldCheck
 } from 'lucide-react';
 
 // --- Leaflet Marker Fix ---
@@ -33,30 +33,40 @@ if (typeof window !== 'undefined') {
  * Handles the visual feedback for the 'restriction_level' column in travel_bucket_list
  */
 const RestrictionBadge = ({ level }) => {
+  // Normalize the input to handle "high", "High ", "RESTRICTED", etc.
+  const normalizedLevel = String(level || '').trim().toLowerCase();
+
   const config = {
-    'Open': {
+    'open': {
       color: 'text-green-500 bg-green-50',
       icon: <CheckCircle2 size={14} />,
       label: 'Public Access'
     },
-    'Permit Required': {
+    'permit required': {
       color: 'text-orange-600 bg-orange-50',
       icon: <AlertCircle size={14} />,
       label: 'Permit Needed (DWC/Forest Dept)'
     },
-    'Guide Mandatory': {
+    'guide mandatory': {
       color: 'text-blue-600 bg-blue-50',
       icon: <UserCheck size={14} />,
       label: 'Local Guide Required'
     },
-    'Restricted': {
+    // Both 'restricted' and 'high' now point to the same High Security UI
+    'restricted': {
+      color: 'text-red-600 bg-red-50',
+      icon: <Lock size={14} />,
+      label: 'High Security / Restricted'
+    },
+    'high': {
       color: 'text-red-600 bg-red-50',
       icon: <Lock size={14} />,
       label: 'High Security / Restricted'
     },
   };
 
-  const { color, icon, label } = config[level] || config['Open'];
+  // Default to 'open' if the level is unknown or null
+  const { color, icon, label } = config[normalizedLevel] || config['open'];
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-semibold ${color}`}>
@@ -1292,7 +1302,7 @@ function App() {
         });
       });
     } catch (e) {
-      console.error("Nearby search error:", e);
+
       showToast(e.message || "Failed to fetch nearby locations", "error");
       setToggles(prev => ({ ...prev, [type]: false }));
     }
@@ -1643,25 +1653,27 @@ function App() {
   };
 
   const toggleRoutePlace = (place) => {
-    // --- ADDED TRIGGER START ---
-    // Only show the safety note if it's NOT an "Open" location
-    const isSelected = selectedRoute.find(p => p.id === place.id);
-    if (!isSelected && place.restriction_level && place.restriction_level !== 'Open') {
+    const isCurrentlySelected = selectedRoute.find(p => p.id === place.id);
+
+    // Normalize restriction level for safety check
+    const level = String(place.restriction_level || '').trim().toLowerCase();
+    const isRestrictedEntry = ['high', 'restricted'].includes(level);
+
+    // If adding a restricted location, trigger the safety modal
+    if (!isCurrentlySelected && isRestrictedEntry) {
       handleViewLocation(place);
     }
-    // --- ADDED TRIGGER END ---
 
     setSelectedRoute(prev => {
-      // 1. Add or remove the place from the selection pool
-      const isSelected = prev.find(p => p.id === place.id);
-      const selectionPool = isSelected
+      const exists = prev.find(p => p.id === place.id);
+      const selectionPool = exists
         ? prev.filter(p => p.id !== place.id)
         : [...prev, place];
 
       if (selectionPool.length === 0) return [];
       if (!userCoords) return selectionPool;
 
-      // 2. Sequential Reordering (Nearest Neighbor Logic continues...)
+      // Optimized Nearest-Neighbor Reordering
       const optimizedRoute = [];
       let remainingOptions = [...selectionPool];
       let currentPoint = { lat: userCoords.lat, lng: userCoords.lng };
@@ -1856,8 +1868,12 @@ function App() {
 
   const handleViewLocation = (location) => {
     setSelectedLocation(location);
-    // Automatically show modal for restricted areas
-    if (location.restriction_level !== 'Open') {
+
+
+    const level = String(location.restriction_level || '').trim().toLowerCase();
+    const shouldShowModal = ['high', 'restricted'].includes(level);
+
+    if (shouldShowModal) {
       setShowSafetyModal(true);
     }
   };
@@ -2025,11 +2041,15 @@ function App() {
   const SafetyOverlay = ({ location, isOpen, onClose }) => {
     if (!isOpen || !location) return null;
 
-    // Only show detailed warnings for non-public areas
-    const isHighRisk = location.restriction_level !== 'Open';
+    const level = String(location.restriction_level || '').trim().toLowerCase();
+    const isHighRisk = ['high', 'restricted'].includes(level);
+
+    const placeName = location.place_name || "Selected Location";
+    const locality = location.locality || "Unknown Locality";
+    const governingOrg = location.governing_org || "the relevant authority";
 
     return (
-      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
         <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
           <div className={`p-4 flex items-center justify-between ${isHighRisk ? 'bg-orange-500' : 'bg-blue-600'} text-white`}>
             <div className="flex items-center gap-2">
@@ -2042,30 +2062,43 @@ function App() {
           </div>
 
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-800 mb-2">{location.name}</h2>
-            <RestrictionBadge level={location.restriction_level} />
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-slate-800">{placeName}</h2>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{locality}</p>
+              <div className="mt-2">
+                <RestrictionBadge level={location.restriction_level} />
+              </div>
+            </div>
 
-            <div className="mt-4 space-y-3 text-sm text-slate-600">
-              <p className="flex gap-2">
-                <InfoIcon size={16} className="shrink-0 text-blue-500" />
-                <span>{location.description || "No specific trail notes available for this location."}</span>
-              </p>
+            <div className="space-y-4 text-sm text-slate-600">
+              
+              <div className={`p-4 rounded-xl border ${isHighRisk ? 'bg-orange-50 border-orange-100 text-orange-900' : 'bg-slate-50 border-slate-100 text-slate-800'}`}>
+                <p className="font-bold mb-1 flex items-center gap-2">
+                  <ShieldCheck size={16} />
+                  Permission & Safety Notice
+                </p>
+                <p className="leading-relaxed">
+                  {placeName} is under the jurisdiction of the <span className="font-bold">{governingOrg}</span>.
+                  {isHighRisk ? (
+                    <span className="block mt-2">
+                      Entry is strictly controlled. You <span className="underline">must</span> obtain a valid permit from the <span className="font-bold">{governingOrg}</span> office prior to your visit[cite: 1].
+                    </span>
+                  ) : (
+                    <span className="block mt-2">
+                      Please ensure you follow the local guidelines set by the {governingOrg} for this area[cite: 1].
+                    </span>
+                  )}
+                </p>
+              </div>
 
-              {isHighRisk && (
-                <div className="bg-orange-50 border border-orange-100 p-3 rounded-lg text-orange-800">
-                  <p className="font-bold mb-1">Required Action:</p>
-                  <p>You must obtain a permit from the relevant Forest Range Office or DWC before entry[cite: 1].</p>
-                </div>
-              )}
-
-              <p className="text-[10px] italic opacity-60 mt-4 pt-4 border-t">
-                By proceeding, you acknowledge that trail conditions can change and you are responsible for your own safety[cite: 1].
+              <p className="text-[10px] leading-relaxed italic opacity-70 pt-4 border-t border-slate-100">
+                By proceeding to view the map for {placeName}, you acknowledge that trekking conditions in {locality} are subject to rapid change. You assume full responsibility for your safety and compliance with {governingOrg} regulations[cite: 1].
               </p>
             </div>
 
             <button
               onClick={onClose}
-              className="w-full mt-6 bg-slate-900 text-white py-3 rounded-xl font-semibold hover:bg-slate-800 transition-all"
+              className="w-full mt-6 bg-slate-900 text-white py-3 rounded-xl font-semibold hover:bg-slate-800 active:scale-[0.98] transition-all"
             >
               I Understand, View Map
             </button>
@@ -2707,10 +2740,10 @@ function App() {
                           <div className="mb-3 flex flex-wrap items-center gap-2">
                             {/* Revised Permission & Access Badge */}
                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border ${ViewingArticle.restriction_level === 'Restricted' || ViewingArticle.restriction_level === 'High'
-                                ? 'bg-rose-100 text-rose-600 border-rose-200'
-                                : ViewingArticle.restriction_level === 'Low'
-                                  ? 'bg-amber-100 text-amber-600 border-amber-200'
-                                  : 'bg-blue-100 text-blue-600 border-blue-200'
+                              ? 'bg-rose-100 text-rose-600 border-rose-200'
+                              : ViewingArticle.restriction_level === 'Low'
+                                ? 'bg-amber-100 text-amber-600 border-amber-200'
+                                : 'bg-blue-100 text-blue-600 border-blue-200'
                               }`}>
                               {ViewingArticle.restriction_level === 'Restricted' && 'Strictly Restricted'}
                               {ViewingArticle.restriction_level === 'High' && 'Permit / Ticket Required'}
@@ -3156,6 +3189,12 @@ function App() {
           onClose={() => setActiveVideoId(null)}
         />
       )}
+
+      <SafetyOverlay
+        location={selectedLocation}
+        isOpen={showSafetyModal}
+        onClose={() => setShowSafetyModal(false)}
+      />
 
       <PrivacyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
 
