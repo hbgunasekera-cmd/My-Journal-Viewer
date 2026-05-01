@@ -2021,7 +2021,10 @@ function App() {
 
 
 
+/*
   // --- Advertisement Loader ---
+  // This block was previously used to load Adsterra ads. 
+  // Commented out to prevent database request interference (Status 0 errors).
   useEffect(() => {
     // Check if the script is already present to avoid multiple loads
     const scriptId = 'adsterra-invoke-script';
@@ -2036,6 +2039,7 @@ function App() {
       document.body.appendChild(script);
     }
   }, []);
+*/
 
 
   const SafetyOverlay = ({ location, isOpen, onClose }) => {
@@ -2071,7 +2075,7 @@ function App() {
             </div>
 
             <div className="space-y-4 text-sm text-slate-600">
-              
+
               <div className={`p-4 rounded-xl border ${isHighRisk ? 'bg-orange-50 border-orange-100 text-orange-900' : 'bg-slate-50 border-slate-100 text-slate-800'}`}>
                 <p className="font-bold mb-1 flex items-center gap-2">
                   <ShieldCheck size={16} />
