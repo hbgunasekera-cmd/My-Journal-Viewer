@@ -78,13 +78,43 @@ const RestrictionBadge = ({ level }) => {
 
 export { RestrictionBadge };
 
-// Configuration
-const SUPABASE_URL = 'https://vpslgikpaintiuayajmx.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_rsbN_QlROV14EEzYjl9dTQ_Jxl-ra44';
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-const WEATHER_KEY = 'f757a5fe02ebcf28154b642fa5e7738d';
+// --- Configuration & Initialization ---
 
-// Constants
+/**
+ * CONFIG pulls directly from environment variables.
+ * Locally: Loaded from the .env.local file you just pulled.
+ * Production: Loaded from the Vercel Dashboard settings.
+ */
+const CONFIG = {
+  SUPABASE: {
+    URL: import.meta.env.VITE_SUPABASE_URL,
+    KEY: import.meta.env.VITE_SUPABASE_KEY,
+  },
+  API_KEYS: {
+    WEATHER: import.meta.env.VITE_WEATHER_KEY,
+  }
+};
+
+// Destructure for cleaner code usage
+const { URL: SUPABASE_URL, KEY: SUPABASE_KEY } = CONFIG.SUPABASE;
+const { WEATHER: WEATHER_KEY } = CONFIG.API_KEYS;
+
+/**
+ * Validation & Initialization
+ * This check prevents the "supabaseUrl is required" crash if keys aren't loaded.
+ */
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.warn(
+    "Configuration missing! If you're on Ubuntu, run 'vercel env pull .env.local'. " +
+    "If you're on Vercel, check that your variables start with 'VITE_'."
+  );
+}
+
+// Initialize only if keys exist
+const supabaseClient = (SUPABASE_URL && SUPABASE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
+
 const DEFAULT_LOCATION = { lat: 7.0777, lng: 79.8924 };
 const VALID_CATEGORIES = ["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Plateaus", "Reserved Forest", "Monastery", "Archaeology", "Reservoir", "Pool", "Stream", "Location"];
 
