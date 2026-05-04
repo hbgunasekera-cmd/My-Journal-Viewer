@@ -10,12 +10,36 @@ import 'leaflet-routing-machine';
 
 // --- Icon Imports ---
 import {
-  Play, Pause, ChevronLeft, ChevronRight, SlidersHorizontal,
-  Share2, Plus, ChevronDown, Heart, MessageCircle,
-  Image as ImageIcon, BookOpen, MapPin, Send,
-  Navigation, RefreshCw, Search, Minus, QrCode, AlertCircle,
-  Camera, Video, Info, Map as MapIcon,
-  X, CheckCircle2, Lock, UserCheck, ShieldCheck
+  AlertCircle,
+  BookOpen,
+  Camera,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Heart,
+  Image as ImageIcon,
+  Info,
+  Lock,
+  Map as MapIcon,
+  MapPin,
+  MessageCircle,
+  Minus,
+  Navigation,
+  Pause,
+  Play,
+  Plus,
+  QrCode,
+  RefreshCw,
+  Search,
+  Send,
+  Share2,
+  ShieldCheck,
+  SlidersHorizontal,
+  UserCheck,
+  Video,
+  X
 } from 'lucide-react';
 
 // --- Leaflet Marker Fix ---
@@ -835,6 +859,7 @@ function App() {
   const [routeDistance, setRouteDistance] = useState(0);
   const [userCoords, setUserCoords] = useState(null);
   const [hoveredPlaceId, setHoveredPlaceId] = useState(null);
+  const [isPlannerExpanded, setIsPlannerExpanded] = useState(false);
 
   // --- 3. Social & Interactions ---
   const [isSocialOpen, setIsSocialOpen] = useState(false);
@@ -2851,7 +2876,7 @@ function App() {
         </div>
       )}
 
-      {/* --- ROUTE PLANNER MODAL --- */}
+  {/* --- ROUTE PLANNER MODAL --- */}
       {isPlannerOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 md:p-4">
           {/* Backdrop */}
@@ -2863,8 +2888,8 @@ function App() {
           {/* Modal Container */}
           <div className="relative bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
 
-            {/* LEFT SIDE: MAP ENGINE */}
-            <div className="h-[40vh] md:h-full md:w-[60%] bg-slate-100 relative z-0 shrink-0 overflow-hidden">
+            {/* LEFT SIDE: MAP ENGINE (Full Screen on Mobile) */}
+            <div className="absolute inset-0 md:relative md:inset-auto md:h-full md:w-[60%] bg-slate-100 z-0 overflow-hidden">
               <MapComponent
                 places={places}
                 userCoords={userCoords}
@@ -2884,19 +2909,47 @@ function App() {
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-900">Interactive Route Engine</p>
                 </div>
               </div>
+              
+              {/* Optional Mobile Map Overlay: Quick Expand Button when collapsed */}
+              {!isPlannerExpanded && (
+                <button 
+                  onClick={() => setIsPlannerExpanded(true)}
+                  className="md:hidden absolute bottom-28 right-4 z-[1000] bg-slate-900 text-white p-3 rounded-full shadow-2xl active:scale-95 transition-transform"
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
-            {/* RIGHT SIDE: SELECTION PANEL */}
-            <div className="flex-1 flex flex-col min-w-0 bg-white z-10 border-t md:border-t-0 md:border-l border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] md:shadow-none rounded-t-[2rem] md:rounded-t-none -mt-6 md:mt-0 overflow-hidden">
+            {/* RIGHT SIDE: SELECTION PANEL (Bottom Sheet on Mobile) */}
+            <div 
+              className={`absolute inset-x-0 bottom-0 z-10 flex flex-col bg-white rounded-t-[2.5rem] md:rounded-t-none md:relative md:w-[40%] md:h-full border-t md:border-t-0 md:border-l border-slate-100 shadow-[0_-15px_40px_rgba(0,0,0,0.15)] md:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform
+                ${isPlannerExpanded ? 'translate-y-0 h-[85vh]' : 'translate-y-[calc(100%-100px)] h-[85vh] md:translate-y-0 md:h-full'}
+              `}
+            >
+              {/* Mobile Drag Indicator & Interaction Arrow */}
+              <div
+                className="w-full flex flex-col items-center pt-2 pb-1 md:hidden cursor-pointer touch-none bg-white rounded-t-[2.5rem]"
+                onClick={() => setIsPlannerExpanded(!isPlannerExpanded)}
+              >
+                <div className="w-12 h-1 bg-slate-100 rounded-full mb-1"></div>
+                <div className={`transition-transform duration-500 ${isPlannerExpanded ? 'rotate-0' : 'animate-bounce'}`}>
+                  {isPlannerExpanded ? (
+                    <ChevronDown className="w-6 h-6 text-slate-400" />
+                  ) : (
+                    <ChevronUp className="w-6 h-6 text-slate-900" />
+                  )}
+                </div>
+              </div>
 
               {/* 1. Header Section */}
-              <div className="p-5 pb-3 border-b border-slate-100 bg-white shrink-0">
+              <div className="px-5 pb-3 border-b border-slate-100 bg-white shrink-0">
                 <div className="flex justify-between items-center mb-4">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1 cursor-pointer md:cursor-auto" onClick={() => { if(window.innerWidth < 768) setIsPlannerExpanded(!isPlannerExpanded); }}>
                     <h2 className="text-lg font-black uppercase tracking-tighter italic text-slate-900 leading-none truncate">Route Planner</h2>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-lg">
-                        {selectedRoute.length} Stops Selected
+                        {selectedRoute.length} Stops
                       </span>
                       {selectedRoute.length > 0 && parseFloat(routeDistance) > 0 && (
                         <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 flex items-center gap-1">
@@ -2918,7 +2971,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="relative">
+                <div className={`relative transition-opacity duration-300 ${!isPlannerExpanded ? 'opacity-0 md:opacity-100 pointer-events-none md:pointer-events-auto' : 'opacity-100'}`}>
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
@@ -2943,14 +2996,13 @@ function App() {
                     className={`flex-1 min-w-[110px] py-2 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center justify-center gap-2 
                 ${toggles[type.id] ? `${type.color} border-transparent text-white shadow-md` : 'bg-white border-slate-100 text-slate-400'}`}
                   >
-                    {/* Note: Ensure RenderDynamicIcon is defined or use specific Lucide icons */}
                     <MapPin className="w-3 h-3" /> {type.label}
                   </button>
                 ))}
               </div>
 
               {/* 3. Scrollable Content Area */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+              <div className="flex-1 overflow-y-auto custom-scrollbar bg-white pb-20 md:pb-0">
                 {/* Nearby Suggestions Section */}
                 {nearbyAttractions.length > 0 && (
                   <div className="p-4 bg-indigo-50/30 border-b border-indigo-100/50">
@@ -3032,7 +3084,7 @@ function App() {
               </div>
 
               {/* 4. Footer Actions */}
-              <div className="p-4 border-t border-slate-100 bg-white shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
+              <div className="absolute md:relative bottom-0 left-0 w-full p-4 border-t border-slate-100 bg-white shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] z-20 rounded-b-[2rem] md:rounded-b-none">
                 <div className="flex gap-2">
                   {selectedRoute.length >= 2 && (
                     <button
