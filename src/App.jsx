@@ -880,7 +880,7 @@ function App() {
   const [addMapInstance, setAddMapInstance] = useState(null);
   const [formData, setFormData] = useState({
     place_name: '',
-    district: '',
+    locality: '',
     latitude: '',
     longitude: '',
     map_url: '',
@@ -997,7 +997,7 @@ function App() {
       ...prev,
       latitude: lat,
       longitude: lng,
-      district: dist || prev.district
+      locality: dist || prev.locality
     }));
   }, []);
 
@@ -1055,7 +1055,7 @@ function App() {
               place_name: place.name,
               latitude: parseFloat(lat.toFixed(6)),
               longitude: parseFloat(lng.toFixed(6)),
-              district: locality,
+              locality: locality,
               map_url: place.url
             }));
 
@@ -1113,11 +1113,11 @@ function App() {
         if (!search) return place.status === 'done' || place.status === 'pending';
 
         const name = (place.place_name || "").toLowerCase();
-        const district = (place.district || "").toLowerCase();
+        const locality = (place.locality || "").toLowerCase();
         const cat = (place.category || "").toLowerCase();
 
         return (place.status === 'done' || place.status === 'pending') &&
-          (name.includes(search) || district.includes(search) || cat.includes(search));
+          (name.includes(search) || locality.includes(search) || cat.includes(search));
       });
 
       if (filteredForWeather.length > 0) {
@@ -1143,36 +1143,63 @@ function App() {
   /** * STEP 2: Filter and Sort
    * Combines status, category, search, and the chosen sort method
    */
-  const filteredPlaces = useMemo(() => {
-    // 2a. Apply Filters
-    const filtered = placesWithDistance.filter(place => {
-      const matchesStatus = place.status === statusFilter;
-      const matchesCategory = filterTag === 'All' || place.category === filterTag;
-      const search = (debouncedSearch || "").toLowerCase();
+// 1. Consolidated Main Filtered Places
+const filteredPlaces = useMemo(() => {
+  const search = (debouncedSearch || "").toLowerCase().trim();
+  const searchTokens = search ? search.split(/\s+/) : [];
 
-      if (!search) return matchesStatus && matchesCategory;
+  const filtered = placesWithDistance.filter(place => {
+    const matchesStatus = place.status === statusFilter;
+    const matchesCategory = filterTag === 'All' || place.category === filterTag;
 
-      const searchableText = [
-        place.place_name,
-        place.district,
-        place.locality,
-        place.category
-      ].join(' ').toLowerCase();
+    if (!matchesStatus || !matchesCategory) return false;
+    if (searchTokens.length === 0) return true;
 
-      return matchesStatus && matchesCategory && searchableText.includes(search);
-    });
+    const searchableFields = [
+      place.place_name,
+      place.locality,
+      place.category
+    ].filter(Boolean).map(f => f.toLowerCase());
 
-    // 2b. Apply Sorting
-    return filtered.sort((a, b) => {
-      if (sortBy === 'recent') return b.id - a.id;
+    return searchTokens.every(token =>
+      searchableFields.some(field => field.includes(token))
+    );
+  });
 
-      if (sortBy === 'distance') {
-        return (a.currentDistance || Infinity) - (b.currentDistance || Infinity);
-      }
+  return filtered.sort((a, b) => {
+    if (sortBy === 'recent') return (b.id || 0) - (a.id || 0);
+    if (sortBy === 'distance') {
+      const distA = a.currentDistance ?? Infinity;
+      const distB = b.currentDistance ?? Infinity;
+      return distA - distB;
+    }
+    return (a.place_name || "").localeCompare(b.place_name || "");
+  });
+}, [placesWithDistance, statusFilter, filterTag, debouncedSearch, sortBy]);
 
-      return (a.place_name || "").localeCompare(b.place_name || "");
-    });
-  }, [placesWithDistance, statusFilter, filterTag, debouncedSearch, sortBy]);
+// 2. Consolidated Planner Filtered Places (Fixes the ReferenceError)
+const plannerFilteredPlaces = useMemo(() => {
+  // Use debouncedSearch or a specific planner search state if you have one
+  const search = (debouncedSearch || "").toLowerCase().trim();
+  const tokens = search ? search.split(/\s+/) : [];
+
+  // Planner only cares about 'done' or 'pending' for route building
+  const baseList = placesWithDistance.filter(p => p.status === 'done' || p.status === 'pending');
+
+  if (tokens.length === 0) return baseList;
+
+  return baseList.filter(place => {
+    const searchableFields = [
+      place.place_name,
+      place.locality,
+      place.category
+    ].filter(Boolean).map(f => f.toLowerCase());
+
+    return tokens.every(token => 
+      searchableFields.some(field => field.includes(token))
+    );
+  });
+}, [placesWithDistance, debouncedSearch]);
 
   /** * STEP 3: Pagination Slice
    * Slices the final sorted/filtered list based on infinite scroll visibleCount
@@ -1955,7 +1982,7 @@ function App() {
         .from('pending_approvals')
         .insert([{
           place_name: formData.place_name,
-          district: formData.district,
+          locality: formData.locality,
           latitude: formData.latitude,
           longitude: formData.longitude,
           map_url: formData.map_url,
@@ -1976,7 +2003,7 @@ function App() {
         category: "Location",
         latitude: null,
         longitude: null,
-        district: "",
+        locality: "",
         map_url: ""
       });
 
@@ -2891,17 +2918,20 @@ function App() {
             {/* LEFT SIDE: MAP ENGINE (Full Screen on Mobile) */}
             <div className="absolute inset-0 md:relative md:inset-auto md:h-full md:w-[60%] bg-slate-100 z-0 overflow-hidden">
               <MapComponent
-                places={places}
-                userCoords={userCoords}
-                selectedRoute={selectedRoute}
-                hoveredPlaceId={hoveredPlaceId}
-                setHoveredPlaceId={setHoveredPlaceId}
-                fetchAttractions={fetchAttractions}
-                setRouteDistance={setRouteDistance}
-                setRouteData={setRouteData}
-                toggles={toggles}
-                mapInstanceRef={mapRef}
-              />
+  // Use the filtered list so markers match your search/filter results
+  places={isPlannerOpen ? plannerFilteredPlaces : filteredPlaces}
+  userCoords={userCoords}
+  selectedRoute={selectedRoute}
+  hoveredPlaceId={hoveredPlaceId}
+  setHoveredPlaceId={setHoveredPlaceId}
+  // Data fetching and state setters
+  fetchAttractions={fetchAttractions}
+  setRouteDistance={setRouteDistance}
+  setRouteData={setRouteData}
+  // Configuration and Refs
+  toggles={toggles}
+  mapInstanceRef={mapRef}
+/>
 
               {/* Floating Map Label */}
               <div className="absolute top-4 left-4 z-[1000] pointer-events-none">
@@ -3127,11 +3157,11 @@ function App() {
                   {formData.latitude ? `${formData.latitude.toFixed(4)}, ${formData.longitude.toFixed(4)}` : "SELECTING POINT..."}
                 </p>
               </div>
-              {formData.district && (
+              {formData.locality && (
                 <div className="flex items-center gap-1 mt-1">
                   <MapPin className="w-2 h-2 text-indigo-500" />
                   <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-tighter">
-                    {formData.district}
+                    {formData.locality}
                   </p>
                 </div>
               )}
@@ -3218,7 +3248,7 @@ function App() {
                   Submit for Review
                 </button>
                 <p className="text-[8px] text-center text-slate-400 font-bold mt-4 uppercase tracking-tighter opacity-60">
-                  * Coordinates and District are captured upon Google Selection
+                  * Coordinates and locality are captured upon Google Selection
                 </p>
               </div>
             </form>
