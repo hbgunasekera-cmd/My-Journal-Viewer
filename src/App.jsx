@@ -2876,7 +2876,7 @@ function App() {
         </div>
       )}
 
-  {/* --- ROUTE PLANNER MODAL --- */}
+      {/* --- ROUTE PLANNER MODAL --- */}
       {isPlannerOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 md:p-4">
           {/* Backdrop */}
@@ -2909,10 +2909,10 @@ function App() {
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-900">Interactive Route Engine</p>
                 </div>
               </div>
-              
+
               {/* Optional Mobile Map Overlay: Quick Expand Button when collapsed */}
               {!isPlannerExpanded && (
-                <button 
+                <button
                   onClick={() => setIsPlannerExpanded(true)}
                   className="md:hidden absolute bottom-28 right-4 z-[1000] bg-slate-900 text-white p-3 rounded-full shadow-2xl active:scale-95 transition-transform"
                 >
@@ -2922,7 +2922,7 @@ function App() {
             </div>
 
             {/* RIGHT SIDE: SELECTION PANEL (Bottom Sheet on Mobile) */}
-            <div 
+            <div
               className={`absolute inset-x-0 bottom-0 z-10 flex flex-col bg-white rounded-t-[2.5rem] md:rounded-t-none md:relative md:w-[40%] md:h-full border-t md:border-t-0 md:border-l border-slate-100 shadow-[0_-15px_40px_rgba(0,0,0,0.15)] md:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform
                 ${isPlannerExpanded ? 'translate-y-0 h-[85vh]' : 'translate-y-[calc(100%-100px)] h-[85vh] md:translate-y-0 md:h-full'}
               `}
@@ -2945,7 +2945,7 @@ function App() {
               {/* 1. Header Section */}
               <div className="px-5 pb-3 border-b border-slate-100 bg-white shrink-0">
                 <div className="flex justify-between items-center mb-4">
-                  <div className="min-w-0 flex-1 cursor-pointer md:cursor-auto" onClick={() => { if(window.innerWidth < 768) setIsPlannerExpanded(!isPlannerExpanded); }}>
+                  <div className="min-w-0 flex-1 cursor-pointer md:cursor-auto" onClick={() => { if (window.innerWidth < 768) setIsPlannerExpanded(!isPlannerExpanded); }}>
                     <h2 className="text-lg font-black uppercase tracking-tighter italic text-slate-900 leading-none truncate">Route Planner</h2>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-lg">
@@ -3193,8 +3193,11 @@ function App() {
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-bold text-[11px] uppercase tracking-wider appearance-none focus:border-indigo-500 transition-all cursor-pointer"
                   >
-                    {["Waterfall", "Mountain", "Trail", "Viewpoint", "Beach", "Park", "Archaeology", "Reservoir", "Location"].map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {/* Map through the VALID_CATEGORIES array */}
+                    {VALID_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
