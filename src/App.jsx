@@ -2024,76 +2024,195 @@ export const PhotoGallery = React.memo(
 );
 
 /*
-* ============================================================
-* VIDEO GALLERY
-* ============================================================
-*/
+ * ============================================================
+ * VIDEO GALLERY
+ * ============================================================
+ */
 
-
-// YouTube Video ID parser
-
+/**
+ * YouTube Video ID parser
+ */
 export const getYouTubeId = (url) => {
   if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|live\/|watch\?v=|&v=)([^#&?]*).*/;
+
+  const regExp =
+    /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|shorts\/|live\/|watch\?v=|&v=)([^#&?]*).*/;
+
   const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
+
+  return match && match[2] && match[2].length === 11
+    ? match[2]
+    : null;
 };
 
 
-export const HubVideoList = ({ supabaseClient, onVideosLoaded, enableShuffle = false }) => {
-  const [videos, setVideos] = useState([]);
-  const onVideosLoadedRef = useRef(onVideosLoaded);
+/**
+ * ============================================================
+ * RANDOM VIDEO SHUFFLE
+ * ============================================================
+ *
+ * IMPORTANT:
+ *
+ * 1. Database columns are NEVER used to determine playlist order.
+ * 2. No display_order.
+ * 3. No created_at.
+ * 4. No id.
+ * 5. No title.
+ * 6. Shuffle happens AFTER Supabase returns the records.
+ * 7. Every browser/client performs its own independent shuffle.
+ *
+ * Fisher-Yates shuffle is used so every record has an equal
+ * opportunity to appear at every position.
+ *
+ * crypto.getRandomValues() is preferred over Math.random()
+ * to provide independent random ordering between clients.
+ */
+export const shuffleVideoRecords = (records) => {
+  const shuffled = Array.isArray(records)
+    ? [...records]
+    : [];
 
-  // Keep callback ref updated without triggering re-fetch effect loops
-  useEffect(() => {
-    onVideosLoadedRef.current = onVideosLoaded;
-  }, [onVideosLoaded]);
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    let randomIndex;
 
-  // Helper function to shuffle array (only used if enableShuffle is true)
-  const shuffleArray = (array) => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    if (
+      typeof crypto !== 'undefined' &&
+      typeof crypto.getRandomValues === 'function'
+    ) {
+      const randomBuffer = new Uint32Array(1);
+
+      crypto.getRandomValues(randomBuffer);
+
+      randomIndex = Math.floor(
+        (randomBuffer[0] / 0x100000000) * (i + 1)
+      );
+    } else {
+      randomIndex = Math.floor(
+        Math.random() * (i + 1)
+      );
     }
-    return shuffled;
-  };
+
+    [
+      shuffled[i],
+      shuffled[randomIndex]
+    ] = [
+        shuffled[randomIndex],
+        shuffled[i]
+      ];
+  }
+
+  return shuffled;
+};
+
+
+/**
+ * ============================================================
+ * HUB VIDEO LIST
+ * ============================================================
+ *
+ * Fetches active videos from Supabase WITHOUT any database
+ * ordering and then randomly shuffles the returned records
+ * locally for this browser/client.
+ *
+ * This guarantees that two clients fetching the gallery at
+ * approximately the same time do not rely on the same database
+ * sequence.
+ */
+export const HubVideoList = ({
+  supabaseClient,
+  onVideosLoaded
+}) => {
+  const [videos, setVideos] = useState([]);
+
+  const onVideosLoadedRef = useRef(
+    onVideosLoaded
+  );
+
+  /*
+   * Keep callback reference updated without causing
+   * unnecessary fetches.
+   */
+  useEffect(() => {
+    onVideosLoadedRef.current =
+      onVideosLoaded;
+  }, [onVideosLoaded]);
 
   useEffect(() => {
     let isSubscribed = true;
 
     const fetchVideos = async () => {
       if (!supabaseClient) {
-        if (onVideosLoadedRef.current) onVideosLoadedRef.current([]);
+        if (
+          onVideosLoadedRef.current
+        ) {
+          onVideosLoadedRef.current([]);
+        }
+
         return;
       }
 
       try {
-        const { data, error } = await supabaseClient
+        /*
+         * IMPORTANT:
+         *
+         * DO NOT add .order() here.
+         *
+         * The database must not determine the playlist order.
+         */
+        const {
+          data,
+          error
+        } = await supabaseClient
           .from('hub_videos')
-          .select('id, url, title, custom_thumbnail_url')
-          .eq('is_active', true)
-          .order('display_order', { ascending: true, nullsFirst: false })
-          .order('id', { ascending: true }); // Primary sequence fallback by ID instead of created_at
+          .select(
+            'id, url, title, custom_thumbnail_url'
+          )
+          .eq('is_active', true);
 
-        if (!error && data && isSubscribed) {
-          const finalData = enableShuffle ? shuffleArray(data) : data;
-          setVideos(finalData);
+        if (
+          !error &&
+          data &&
+          isSubscribed
+        ) {
+          /*
+           * Randomize ONLY after the database response.
+           *
+           * This is the playlist order that this particular
+           * browser/client will receive.
+           */
+          const shuffledVideos =
+            shuffleVideoRecords(data);
 
-          if (onVideosLoadedRef.current) {
-            onVideosLoadedRef.current(finalData);
+          setVideos(shuffledVideos);
+
+          if (
+            onVideosLoadedRef.current
+          ) {
+            onVideosLoadedRef.current(
+              shuffledVideos
+            );
           }
         } else if (isSubscribed) {
           setVideos([]);
-          if (onVideosLoadedRef.current) {
+
+          if (
+            onVideosLoadedRef.current
+          ) {
             onVideosLoadedRef.current([]);
           }
         }
       } catch (err) {
-        console.error("Error loading hub videos:", err);
+        console.error(
+          'Error loading hub videos:',
+          err
+        );
+
         if (isSubscribed) {
           setVideos([]);
-          if (onVideosLoadedRef.current) {
+
+          if (
+            onVideosLoadedRef.current
+          ) {
             onVideosLoadedRef.current([]);
           }
         }
@@ -2105,256 +2224,375 @@ export const HubVideoList = ({ supabaseClient, onVideosLoaded, enableShuffle = f
     return () => {
       isSubscribed = false;
     };
-  }, [supabaseClient, enableShuffle]);
+  }, [supabaseClient]);
 
   return null;
 };
 
 
-export const VideoGallery = React.memo(({ videos, initialIndex = 0, onClose }) => {
-  const [activeIndex, setActiveIndex] = useState(initialIndex);
+/**
+ * ============================================================
+ * VIDEO GALLERY
+ * ============================================================
+ */
+export const VideoGallery = React.memo(
+  ({
+    videos,
+    initialIndex = 0,
+    onClose
+  }) => {
+    const [activeIndex, setActiveIndex] =
+      useState(initialIndex);
 
-  // FIX 1: Robust URL parsing using Regex to handle
-  // commas, spaces, newlines, semicolons, and pipe separators
-  const videoList = (Array.isArray(videos) ? videos : [videos])
-    .flatMap((item) => {
-      if (typeof item === 'string') {
-        return item.split(/[\s,;|]+/);
-      }
-
-      // Handle DB objects where the url property contains multiple links
-      if (
-        item &&
-        typeof item === 'object' &&
-        typeof item.url === 'string'
-      ) {
-        const urls = item.url.split(/[\s,;|]+/);
-
-        if (urls.length > 1) {
-          return urls.map((u) => ({
-            ...item,
-            url: u,
-          }));
+    /*
+     * Normalize incoming video records.
+     *
+     * IMPORTANT:
+     * We do NOT sort or shuffle here.
+     *
+     * The order supplied by HubVideoList is already the
+     * randomized per-client playlist order.
+     */
+    const videoList = (
+      Array.isArray(videos)
+        ? videos
+        : [videos]
+    )
+      .flatMap((item) => {
+        if (typeof item === 'string') {
+          return item.split(/[\s,;|]+/);
         }
-      }
 
-      return item;
-    })
-    .map((item) => {
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
+        /*
+         * Handle DB objects where url contains
+         * multiple links.
+         */
+        if (
+          item &&
+          typeof item === 'object' &&
+          typeof item.url === 'string'
+        ) {
+          const urls =
+            item.url.split(/[\s,;|]+/);
 
-        return {
-          url: trimmed,
-          title: '',
-          custom_thumbnail_url: '',
-        };
-      }
+          if (urls.length > 1) {
+            return urls.map((u) => ({
+              ...item,
+              url: u
+            }));
+          }
+        }
 
-      return item;
-    })
-    .filter(
-      (item) =>
-        item &&
-        (item.url || item.custom_thumbnail_url) &&
-        String(item.url).trim() !== ''
-    );
+        return item;
+      })
+      .map((item) => {
+        if (typeof item === 'string') {
+          const trimmed =
+            item.trim();
 
-  // FIX 2: Gallery lifecycle + URL synchronization
-  // The parent MUST provide a stable onClose callback.
-  useEffect(() => {
-    const scrollY = window.scrollY;
+          return {
+            url: trimmed,
+            title: '',
+            custom_thumbnail_url: ''
+          };
+        }
 
-    document.body.classList.add('modal-open');
-
-    // Log visit analytics once when Video Gallery mounts
-    if (typeof logVisit === 'function') {
-      logVisit('Video Gallery');
-    }
-
-    // FIX 3: Do not push /videos if we are already there.
-    // Prevents unnecessary history entries and URL blinking.
-    if (window.location.pathname !== '/videos') {
-      window.history.pushState(
-        { modalOpen: true },
-        '',
-        '/videos'
+        return item;
+      })
+      .filter(
+        (item) =>
+          item &&
+          (
+            item.url ||
+            item.custom_thumbnail_url
+          ) &&
+          String(item.url).trim() !== ''
       );
-    }
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
+    /*
+     * ========================================================
+     * GALLERY LIFECYCLE + URL SYNCHRONIZATION
+     * ========================================================
+     */
+    useEffect(() => {
+      const scrollY =
+        window.scrollY;
+
+      document.body.classList.add(
+        'modal-open'
+      );
+
+      /*
+       * Log visit analytics once when
+       * Video Gallery mounts.
+       */
+      if (
+        typeof logVisit === 'function'
+      ) {
+        logVisit('Video Gallery');
       }
-    };
 
-    // Browser Back button closes the gallery
-    const handlePopState = () => {
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      document.body.classList.remove('modal-open');
-      window.scrollTo(0, scrollY);
-
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('popstate', handlePopState);
-
-      // Revert URL when the gallery actually closes
-      if (window.location.pathname === '/videos') {
+      /*
+       * Do not push /videos if already there.
+       */
+      if (
+        window.location.pathname !==
+        '/videos'
+      ) {
         window.history.pushState(
-          { modalOpen: false },
+          {
+            modalOpen: true
+          },
           '',
-          '/'
+          '/videos'
         );
       }
-    };
-  }, [onClose]);
 
-  if (videoList.length === 0) {
-    return null;
-  }
+      /*
+       * Escape closes gallery.
+       */
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      };
 
-  const currentVideo =
-    videoList[activeIndex] || videoList[0];
+      /*
+       * Browser Back button closes gallery.
+       */
+      const handlePopState = () => {
+        onClose();
+      };
 
-  const videoId = getYouTubeId(currentVideo.url);
+      window.addEventListener(
+        'keydown',
+        handleKeyDown
+      );
 
-  return (
-    <div className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200 select-none">
+      window.addEventListener(
+        'popstate',
+        handlePopState
+      );
 
-      {/* Header */}
-      <header className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
-        <div>
-          <h3 className="text-white font-black uppercase tracking-widest text-xs">
-            Video Journal
-          </h3>
+      return () => {
+        document.body.classList.remove(
+          'modal-open'
+        );
 
-          <p className="text-[10px] text-indigo-400 font-bold uppercase">
-            {activeIndex + 1} of {videoList.length} Clips
-          </p>
-        </div>
+        window.scrollTo(
+          0,
+          scrollY
+        );
 
-        <button
-          onClick={onClose}
-          aria-label="Close video gallery"
-          className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-white"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </header>
+        window.removeEventListener(
+          'keydown',
+          handleKeyDown
+        );
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 md:p-6 overflow-hidden">
+        window.removeEventListener(
+          'popstate',
+          handlePopState
+        );
 
-        {/* FIX 4:
-            Mobile uses flex-none instead of flex-1 so the
-            video area does not force the playlist off-screen.
-        */}
-        <div className="flex-none lg:flex-1 w-full flex items-center justify-center relative min-h-[40vh] lg:min-h-0">
+        /*
+         * Revert URL when gallery closes.
+         */
+        if (
+          window.location.pathname ===
+          '/videos'
+        ) {
+          window.history.pushState(
+            {
+              modalOpen: false
+            },
+            '',
+            '/'
+          );
+        }
+      };
+    }, [onClose]);
 
-          <div className="relative w-full max-w-5xl aspect-video rounded-[2rem] overflow-hidden bg-black border border-white/10 shadow-2xl">
+    /*
+     * No valid videos.
+     */
+    if (videoList.length === 0) {
+      return null;
+    }
 
-            {videoId ? (
-              <iframe
-                key={videoId}
-                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
-                className="absolute top-0 left-0 w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                title={currentVideo.title || 'Video Journal Player'}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full text-white/50 text-sm">
-                Invalid or Unsupported Video URL
-              </div>
-            )}
+    const currentVideo =
+      videoList[activeIndex] ||
+      videoList[0];
+
+    const videoId =
+      getYouTubeId(
+        currentVideo.url
+      );
+
+    return (
+      <div className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200 select-none">
+
+        {/* Header */}
+        <header className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
+
+          <div>
+            <h3 className="text-white font-black uppercase tracking-widest text-xs">
+              Video Journal
+            </h3>
+
+            <p className="text-[10px] text-indigo-400 font-bold uppercase">
+              {activeIndex + 1} of{' '}
+              {videoList.length} Clips
+            </p>
+          </div>
+
+          <button
+            onClick={onClose}
+            aria-label="Close video gallery"
+            className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+        </header>
+
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 md:p-6 overflow-hidden">
+
+          {/*
+           * Mobile uses flex-none so the video area
+           * does not force the playlist off-screen.
+           */}
+          <div className="flex-none lg:flex-1 w-full flex items-center justify-center relative min-h-[40vh] lg:min-h-0">
+
+            <div className="relative w-full max-w-5xl aspect-video rounded-[2rem] overflow-hidden bg-black border border-white/10 shadow-2xl">
+
+              {videoId ? (
+                <iframe
+                  key={videoId}
+                  src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
+                  className="absolute top-0 left-0 w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  title={
+                    currentVideo.title ||
+                    'Video Journal Player'
+                  }
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-white/50 text-sm">
+                  Invalid or Unsupported
+                  Video URL
+                </div>
+              )}
+
+            </div>
 
           </div>
-        </div>
 
-        {/* FIX 5:
-            flex-1 + min-h-0 creates an internal scrolling boundary
-            for the video list on mobile.
-        */}
-        <aside className="w-full lg:w-80 flex-1 lg:flex-none flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-2 pb-20 lg:pb-0 min-h-0">
 
-          <h4 className="text-white/70 text-xs font-bold uppercase tracking-widest mb-2 px-1">
-            More Videos
-          </h4>
+          {/*
+           * Playlist scrolling boundary.
+           */}
+          <aside className="w-full lg:w-80 flex-1 lg:flex-none flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-2 pb-20 lg:pb-0 min-h-0">
 
-          {videoList.map((item, idx) => {
-            const listVideoId = getYouTubeId(item.url);
+            <h4 className="text-white/70 text-xs font-bold uppercase tracking-widest mb-2 px-1">
+              More Videos
+            </h4>
 
-            const thumbnailUrl =
-              item.custom_thumbnail_url ||
-              (
-                listVideoId
-                  ? `https://img.youtube.com/vi/${listVideoId}/hqdefault.jpg`
-                  : '/default-video-placeholder.jpg'
-              );
+            {videoList.map(
+              (item, idx) => {
+                const listVideoId =
+                  getYouTubeId(
+                    item.url
+                  );
 
-            const isActive = activeIndex === idx;
+                const thumbnailUrl =
+                  item.custom_thumbnail_url ||
+                  (
+                    listVideoId
+                      ? `https://img.youtube.com/vi/${listVideoId}/hqdefault.jpg`
+                      : '/default-video-placeholder.jpg'
+                  );
 
-            return (
-              <button
-                key={item.id || item.url || idx}
-                onClick={() => setActiveIndex(idx)}
-                className={`group flex items-start gap-3 w-full text-left p-2 rounded-xl transition-all ${isActive
-                  ? 'bg-white/10 border border-indigo-500'
-                  : 'hover:bg-white/5 border border-transparent'
-                  }`}
-              >
+                const isActive =
+                  activeIndex === idx;
 
-                {/* Thumbnail */}
-                <div className="relative w-24 aspect-video flex-shrink-0 rounded-lg overflow-hidden bg-slate-800">
-
-                  <img
-                    src={thumbnailUrl}
-                    alt={item.title || 'Thumbnail'}
-                    className={`w-full h-full object-cover transition-opacity ${isActive
-                      ? 'opacity-100'
-                      : 'opacity-70 group-hover:opacity-100'
-                      }`}
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src =
-                        '/default-video-placeholder.jpg';
-                    }}
-                  />
-
-                  {isActive && (
-                    <div className="absolute inset-0 bg-indigo-500/30 flex items-center justify-center">
-                      <Play className="w-4 h-4 text-white fill-white" />
-                    </div>
-                  )}
-
-                </div>
-
-                {/* Title */}
-                <div className="flex-1 overflow-hidden">
-                  <p
-                    className={`text-xs font-semibold line-clamp-2 ${isActive
-                      ? 'text-white'
-                      : 'text-slate-300'
+                return (
+                  <button
+                    key={
+                      item.id ||
+                      item.url ||
+                      idx
+                    }
+                    onClick={() =>
+                      setActiveIndex(idx)
+                    }
+                    className={`group flex items-start gap-3 w-full text-left p-2 rounded-xl transition-all ${isActive
+                        ? 'bg-white/10 border border-indigo-500'
+                        : 'hover:bg-white/5 border border-transparent'
                       }`}
                   >
-                    {item.title || 'Journal Entry'}
-                  </p>
-                </div>
 
-              </button>
-            );
-          })}
+                    {/* Thumbnail */}
+                    <div className="relative w-24 aspect-video flex-shrink-0 rounded-lg overflow-hidden bg-slate-800">
 
-        </aside>
-      </main>
-    </div>
-  );
-});
+                      <img
+                        src={thumbnailUrl}
+                        alt={
+                          item.title ||
+                          'Thumbnail'
+                        }
+                        className={`w-full h-full object-cover transition-opacity ${isActive
+                            ? 'opacity-100'
+                            : 'opacity-70 group-hover:opacity-100'
+                          }`}
+                        onError={(e) => {
+                          e.target.onerror =
+                            null;
+
+                          e.target.src =
+                            '/default-video-placeholder.jpg';
+                        }}
+                      />
+
+                      {isActive && (
+                        <div className="absolute inset-0 bg-indigo-500/30 flex items-center justify-center">
+                          <Play className="w-4 h-4 text-white fill-white" />
+                        </div>
+                      )}
+
+                    </div>
+
+
+                    {/* Title */}
+                    <div className="flex-1 overflow-hidden">
+
+                      <p
+                        className={`text-xs font-semibold line-clamp-2 ${isActive
+                            ? 'text-white'
+                            : 'text-slate-300'
+                          }`}
+                      >
+                        {item.title ||
+                          'Journal Entry'}
+                      </p>
+
+                    </div>
+
+                  </button>
+                );
+              }
+            )}
+
+          </aside>
+
+        </main>
+
+      </div>
+    );
+  }
+);
 
 export const MapComponent = ({
   places = [],
