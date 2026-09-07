@@ -2045,177 +2045,106 @@ export const getYouTubeId = (url) => {
     : null;
 };
 
+/**
+ * ============================================================
+ * VIDEO NORMALIZATION ENGINE
+ * ============================================================
+ * Extracts and flattens comma/space-separated URLs before shuffling
+ */
+export const normalizeVideoRecords = (videos) => {
+  return (Array.isArray(videos) ? videos : [videos])
+    .flatMap((item) => {
+      if (typeof item === 'string') {
+        return item.split(/[\s,;|]+/);
+      }
+      if (item && typeof item === 'object' && typeof item.url === 'string') {
+        const urls = item.url.split(/[\s,;|]+/);
+        if (urls.length > 1) {
+          return urls.map((u) => ({ ...item, url: u }));
+        }
+      }
+      return item;
+    })
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { url: item.trim(), title: '', custom_thumbnail_url: '' };
+      }
+      return item;
+    })
+    .filter(
+      (item) =>
+        item &&
+        (item.url || item.custom_thumbnail_url) &&
+        String(item.url).trim() !== ''
+    );
+};
 
 /**
  * ============================================================
  * RANDOM VIDEO SHUFFLE
  * ============================================================
- *
- * IMPORTANT:
- *
- * 1. Database columns are NEVER used to determine playlist order.
- * 2. No display_order.
- * 3. No created_at.
- * 4. No id.
- * 5. No title.
- * 6. Shuffle happens AFTER Supabase returns the records.
- * 7. Every browser/client performs its own independent shuffle.
- *
- * Fisher-Yates shuffle is used so every record has an equal
- * opportunity to appear at every position.
- *
- * crypto.getRandomValues() is preferred over Math.random()
- * to provide independent random ordering between clients.
  */
 export const shuffleVideoRecords = (records) => {
-  const shuffled = Array.isArray(records)
-    ? [...records]
-    : [];
+  if (!Array.isArray(records) || records.length === 0) return [];
 
+  // CRITICAL FIX: We map over the array to create brand new object references. 
+  // This guarantees React state will recognize it as a completely new array 
+  // and force a re-render, ignoring any stale cached state.
+  const shuffled = records.map((record) => ({ ...record }));
+
+  // Primitive Fisher-Yates shuffle using standard temp variables.
+  // This removes any potential ASI minifier bugs or Crypto API fallback failures.
   for (let i = shuffled.length - 1; i > 0; i--) {
-    let randomIndex;
-
-    if (
-      typeof crypto !== 'undefined' &&
-      typeof crypto.getRandomValues === 'function'
-    ) {
-      const randomBuffer = new Uint32Array(1);
-
-      crypto.getRandomValues(randomBuffer);
-
-      randomIndex = Math.floor(
-        (randomBuffer[0] / 0x100000000) * (i + 1)
-      );
-    } else {
-      randomIndex = Math.floor(
-        Math.random() * (i + 1)
-      );
-    }
-
-    [
-      shuffled[i],
-      shuffled[randomIndex]
-    ] = [
-        shuffled[randomIndex],
-        shuffled[i]
-      ];
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
   }
 
   return shuffled;
 };
 
-
 /**
  * ============================================================
  * HUB VIDEO LIST
  * ============================================================
- *
- * Fetches active videos from Supabase WITHOUT any database
- * ordering and then randomly shuffles the returned records
- * locally for this browser/client.
- *
- * This guarantees that two clients fetching the gallery at
- * approximately the same time do not rely on the same database
- * sequence.
  */
-export const HubVideoList = ({
-  supabaseClient,
-  onVideosLoaded
-}) => {
-  const [videos, setVideos] = useState([]);
 
-  const onVideosLoadedRef = useRef(
-    onVideosLoaded
-  );
+export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
+  const onVideosLoadedRef = useRef(onVideosLoaded);
+  const hasFetchedRef = useRef(false);
 
-  /*
-   * Keep callback reference updated without causing
-   * unnecessary fetches.
-   */
   useEffect(() => {
-    onVideosLoadedRef.current =
-      onVideosLoaded;
+    onVideosLoadedRef.current = onVideosLoaded;
   }, [onVideosLoaded]);
 
   useEffect(() => {
+    if (!supabaseClient || hasFetchedRef.current) return;
+
     let isSubscribed = true;
 
     const fetchVideos = async () => {
-      if (!supabaseClient) {
-        if (
-          onVideosLoadedRef.current
-        ) {
-          onVideosLoadedRef.current([]);
-        }
-
-        return;
-      }
-
       try {
-        /*
-         * IMPORTANT:
-         *
-         * DO NOT add .order() here.
-         *
-         * The database must not determine the playlist order.
-         */
-        const {
-          data,
-          error
-        } = await supabaseClient
+        const { data, error } = await supabaseClient
           .from('hub_videos')
-          .select(
-            'id, url, title, custom_thumbnail_url'
-          )
+          .select('id, url, title, custom_thumbnail_url')
           .eq('is_active', true);
 
-        if (
-          !error &&
-          data &&
-          isSubscribed
-        ) {
-          /*
-           * Randomize ONLY after the database response.
-           *
-           * This is the playlist order that this particular
-           * browser/client will receive.
-           */
-          const shuffledVideos =
-            shuffleVideoRecords(data);
+        if (!error && data && isSubscribed) {
+          hasFetchedRef.current = true;
 
-          setVideos(shuffledVideos);
+          // 1. Flatten all grouped/comma-separated URLs first
+          const normalizedData = normalizeVideoRecords(data);
 
-          if (
-            onVideosLoadedRef.current
-          ) {
-            onVideosLoadedRef.current(
-              shuffledVideos
-            );
-          }
-        } else if (isSubscribed) {
-          setVideos([]);
+          // 2. Shuffle the fully flattened array
+          const shuffledVideos = shuffleVideoRecords(normalizedData);
 
-          if (
-            onVideosLoadedRef.current
-          ) {
-            onVideosLoadedRef.current([]);
+          if (onVideosLoadedRef.current) {
+            onVideosLoadedRef.current(shuffledVideos);
           }
         }
       } catch (err) {
-        console.error(
-          'Error loading hub videos:',
-          err
-        );
-
-        if (isSubscribed) {
-          setVideos([]);
-
-          if (
-            onVideosLoadedRef.current
-          ) {
-            onVideosLoadedRef.current([]);
-          }
-        }
+        console.error('Error loading hub videos:', err);
       }
     };
 
@@ -2229,7 +2158,6 @@ export const HubVideoList = ({
   return null;
 };
 
-
 /**
  * ============================================================
  * VIDEO GALLERY
@@ -2241,73 +2169,14 @@ export const VideoGallery = React.memo(
     initialIndex = 0,
     onClose
   }) => {
-    const [activeIndex, setActiveIndex] =
-      useState(initialIndex);
+    const [activeIndex, setActiveIndex] = useState(initialIndex);
 
     /*
-     * Normalize incoming video records.
-     *
-     * IMPORTANT:
-     * We do NOT sort or shuffle here.
-     *
+     * Clean normalization of incoming video records.
      * The order supplied by HubVideoList is already the
      * randomized per-client playlist order.
      */
-    const videoList = (
-      Array.isArray(videos)
-        ? videos
-        : [videos]
-    )
-      .flatMap((item) => {
-        if (typeof item === 'string') {
-          return item.split(/[\s,;|]+/);
-        }
-
-        /*
-         * Handle DB objects where url contains
-         * multiple links.
-         */
-        if (
-          item &&
-          typeof item === 'object' &&
-          typeof item.url === 'string'
-        ) {
-          const urls =
-            item.url.split(/[\s,;|]+/);
-
-          if (urls.length > 1) {
-            return urls.map((u) => ({
-              ...item,
-              url: u
-            }));
-          }
-        }
-
-        return item;
-      })
-      .map((item) => {
-        if (typeof item === 'string') {
-          const trimmed =
-            item.trim();
-
-          return {
-            url: trimmed,
-            title: '',
-            custom_thumbnail_url: ''
-          };
-        }
-
-        return item;
-      })
-      .filter(
-        (item) =>
-          item &&
-          (
-            item.url ||
-            item.custom_thumbnail_url
-          ) &&
-          String(item.url).trim() !== ''
-      );
+    const videoList = normalizeVideoRecords(videos);
 
     /*
      * ========================================================
@@ -2315,30 +2184,22 @@ export const VideoGallery = React.memo(
      * ========================================================
      */
     useEffect(() => {
-      const scrollY =
-        window.scrollY;
+      const scrollY = window.scrollY;
 
-      document.body.classList.add(
-        'modal-open'
-      );
+      document.body.classList.add('modal-open');
 
       /*
        * Log visit analytics once when
        * Video Gallery mounts.
        */
-      if (
-        typeof logVisit === 'function'
-      ) {
+      if (typeof logVisit === 'function') {
         logVisit('Video Gallery');
       }
 
       /*
        * Do not push /videos if already there.
        */
-      if (
-        window.location.pathname !==
-        '/videos'
-      ) {
+      if (window.location.pathname !== '/videos') {
         window.history.pushState(
           {
             modalOpen: true
@@ -2364,43 +2225,21 @@ export const VideoGallery = React.memo(
         onClose();
       };
 
-      window.addEventListener(
-        'keydown',
-        handleKeyDown
-      );
-
-      window.addEventListener(
-        'popstate',
-        handlePopState
-      );
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('popstate', handlePopState);
 
       return () => {
-        document.body.classList.remove(
-          'modal-open'
-        );
+        document.body.classList.remove('modal-open');
 
-        window.scrollTo(
-          0,
-          scrollY
-        );
+        window.scrollTo(0, scrollY);
 
-        window.removeEventListener(
-          'keydown',
-          handleKeyDown
-        );
-
-        window.removeEventListener(
-          'popstate',
-          handlePopState
-        );
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('popstate', handlePopState);
 
         /*
          * Revert URL when gallery closes.
          */
-        if (
-          window.location.pathname ===
-          '/videos'
-        ) {
+        if (window.location.pathname === '/videos') {
           window.history.pushState(
             {
               modalOpen: false
@@ -2419,14 +2258,8 @@ export const VideoGallery = React.memo(
       return null;
     }
 
-    const currentVideo =
-      videoList[activeIndex] ||
-      videoList[0];
-
-    const videoId =
-      getYouTubeId(
-        currentVideo.url
-      );
+    const currentVideo = videoList[activeIndex] || videoList[0];
+    const videoId = getYouTubeId(currentVideo.url);
 
     return (
       <div className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-3xl flex flex-col animate-in fade-in duration-200 select-none">
@@ -2440,8 +2273,7 @@ export const VideoGallery = React.memo(
             </h3>
 
             <p className="text-[10px] text-indigo-400 font-bold uppercase">
-              {activeIndex + 1} of{' '}
-              {videoList.length} Clips
+              {activeIndex + 1} of {videoList.length} Clips
             </p>
           </div>
 
@@ -2454,7 +2286,6 @@ export const VideoGallery = React.memo(
           </button>
 
         </header>
-
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 md:p-6 overflow-hidden">
@@ -2481,15 +2312,13 @@ export const VideoGallery = React.memo(
                 />
               ) : (
                 <div className="flex items-center justify-center h-full text-white/50 text-sm">
-                  Invalid or Unsupported
-                  Video URL
+                  Invalid or Unsupported Video URL
                 </div>
               )}
 
             </div>
 
           </div>
-
 
           {/*
            * Playlist scrolling boundary.
@@ -2500,90 +2329,66 @@ export const VideoGallery = React.memo(
               More Videos
             </h4>
 
-            {videoList.map(
-              (item, idx) => {
-                const listVideoId =
-                  getYouTubeId(
-                    item.url
-                  );
+            {videoList.map((item, idx) => {
+              const listVideoId = getYouTubeId(item.url);
 
-                const thumbnailUrl =
-                  item.custom_thumbnail_url ||
-                  (
-                    listVideoId
-                      ? `https://img.youtube.com/vi/${listVideoId}/hqdefault.jpg`
-                      : '/default-video-placeholder.jpg'
-                  );
+              const thumbnailUrl =
+                item.custom_thumbnail_url ||
+                (listVideoId
+                  ? `https://img.youtube.com/vi/${listVideoId}/hqdefault.jpg`
+                  : '/default-video-placeholder.jpg');
 
-                const isActive =
-                  activeIndex === idx;
+              const isActive = activeIndex === idx;
 
-                return (
-                  <button
-                    key={
-                      item.id ||
-                      item.url ||
-                      idx
-                    }
-                    onClick={() =>
-                      setActiveIndex(idx)
-                    }
-                    className={`group flex items-start gap-3 w-full text-left p-2 rounded-xl transition-all ${isActive
-                        ? 'bg-white/10 border border-indigo-500'
-                        : 'hover:bg-white/5 border border-transparent'
-                      }`}
-                  >
+              return (
+                <button
+                  key={item.id || item.url || idx}
+                  onClick={() => setActiveIndex(idx)}
+                  className={`group flex items-start gap-3 w-full text-left p-2 rounded-xl transition-all ${isActive
+                    ? 'bg-white/10 border border-indigo-500'
+                    : 'hover:bg-white/5 border border-transparent'
+                    }`}
+                >
 
-                    {/* Thumbnail */}
-                    <div className="relative w-24 aspect-video flex-shrink-0 rounded-lg overflow-hidden bg-slate-800">
+                  {/* Thumbnail */}
+                  <div className="relative w-24 aspect-video flex-shrink-0 rounded-lg overflow-hidden bg-slate-800">
 
-                      <img
-                        src={thumbnailUrl}
-                        alt={
-                          item.title ||
-                          'Thumbnail'
-                        }
-                        className={`w-full h-full object-cover transition-opacity ${isActive
-                            ? 'opacity-100'
-                            : 'opacity-70 group-hover:opacity-100'
-                          }`}
-                        onError={(e) => {
-                          e.target.onerror =
-                            null;
+                    <img
+                      src={thumbnailUrl}
+                      alt={item.title || 'Thumbnail'}
+                      className={`w-full h-full object-cover transition-opacity ${isActive
+                        ? 'opacity-100'
+                        : 'opacity-70 group-hover:opacity-100'
+                        }`}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/default-video-placeholder.jpg';
+                      }}
+                    />
 
-                          e.target.src =
-                            '/default-video-placeholder.jpg';
-                        }}
-                      />
+                    {isActive && (
+                      <div className="absolute inset-0 bg-indigo-500/30 flex items-center justify-center">
+                        <Play className="w-4 h-4 text-white fill-white" />
+                      </div>
+                    )}
 
-                      {isActive && (
-                        <div className="absolute inset-0 bg-indigo-500/30 flex items-center justify-center">
-                          <Play className="w-4 h-4 text-white fill-white" />
-                        </div>
-                      )}
+                  </div>
 
-                    </div>
+                  {/* Title */}
+                  <div className="flex-1 overflow-hidden">
 
+                    <p
+                      className={`text-xs font-semibold line-clamp-2 ${isActive ? 'text-white' : 'text-slate-300'
+                        }`}
+                    >
+                      {item.title || 'Journal Entry'}
+                    </p>
 
-                    {/* Title */}
-                    <div className="flex-1 overflow-hidden">
+                  </div>
 
-                      <p
-                        className={`text-xs font-semibold line-clamp-2 ${isActive
-                            ? 'text-white'
-                            : 'text-slate-300'
-                          }`}
-                      >
-                        {item.title ||
-                          'Journal Entry'}
-                      </p>
-
-                    </div>
-
-                  </button>
-                );
-              }
-            )}
+                </button>
+              );
+            })}
 
           </aside>
 
