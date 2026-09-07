@@ -482,10 +482,14 @@ export const truncateText = (text, maxLength = 155) => {
 // 12. CONSOLIDATED SEO & SCHEMA MANAGERS
 // =======================================================================
 
+// =======================================================================
+// 12. CONSOLIDATED SEO & SCHEMA MANAGERS
+// =======================================================================
+
 /**
  * Injects or updates Schema.org JSON-LD structured data with XSS prevention
  */
-export const injectJSONLDSchema = (place, canonicalUrl, isGallery = false) => {
+export const injectJSONLDSchema = (place, canonicalUrl, isGallery = false, photos = []) => {
   let schemaScript = document.getElementById('json-ld-schema');
 
   if (!schemaScript) {
@@ -529,13 +533,24 @@ export const injectJSONLDSchema = (place, canonicalUrl, isGallery = false) => {
   let schemaData;
 
   if (isGallery) {
+    const photosList = (Array.isArray(photos) && photos.length > 0)
+      ? photos
+      : (Array.isArray(place.photos) ? place.photos : []);
+
     schemaData = {
       "@context": "https://schema.org",
       "@type": "ImageGallery",
       "name": `${place.place_name || 'Gallery'} Photos`,
       "description": description,
       "url": canonicalUrl,
-      "primaryImageOfPage": place.cover_photo_url || `${BASE_URL}/my-journal-logo.png`
+      "primaryImageOfPage": place.cover_photo_url || `${BASE_URL}/my-journal-logo.png`,
+      "image": photosList.map((url, idx) => ({
+        "@type": "ImageObject",
+        "url": typeof getOptimizedUrl === 'function' ? getOptimizedUrl(url, 1200, 85) : url,
+        "contentUrl": url,
+        "name": `${place.place_name || 'Gallery'} Photo ${idx + 1}`,
+        "description": description
+      }))
     };
   } else {
     schemaData = {
@@ -590,6 +605,7 @@ export const injectJSONLDSchema = (place, canonicalUrl, isGallery = false) => {
 export const updateSEO = (place = null, options = {}) => {
   const {
     isGallery = false,
+    galleryPhotos = [],
     category = 'All',
     searchTerm = '',
     categoryDescriptions = {}
@@ -619,7 +635,12 @@ export const updateSEO = (place = null, options = {}) => {
     if (isGallery) {
       title = `${placeName} Photos & Aerial Views (${categoryName}), Sri Lanka | My Journal`;
       ogTitle = `Explore ${placeName} (${categoryName}) - Aerial Photos & Field Notes`;
-      description = `Browse high-resolution photo gallery and drone perspectives of ${placeName}${localityName}, Sri Lanka. Field notes and route details included.`;
+
+      const rawStory = place.ai_article?.story || place.description;
+      description = rawStory
+        ? truncateText(`Photo gallery of ${placeName}${localityName}. ${rawStory}`, 155)
+        : `Browse high-resolution photo gallery and drone perspectives of ${placeName}${localityName}, Sri Lanka. Field notes and route details included.`;
+
       canonicalUrl = `${BASE_URL}/gallery/${slug}`;
     } else {
       title = `${placeName} ${categoryName} Guide${localityName} Sri Lanka | My Journal`;
@@ -708,8 +729,8 @@ export const updateSEO = (place = null, options = {}) => {
     el.setAttribute('content', content || '');
   });
 
-  // Inject structured JSON-LD schema with isGallery context flag
-  injectJSONLDSchema(place, canonicalUrl, isGallery);
+  // Inject structured JSON-LD schema with isGallery context flag and gallery photos
+  injectJSONLDSchema(place, canonicalUrl, isGallery, galleryPhotos);
 };
 
 // =======================================================================
@@ -1361,7 +1382,6 @@ const MapSelectionComponent = React.memo(({ onLocationSelect, initialCoords, onM
 * ============================================================
 */
 
-
 export const PhotoGallery = React.memo(
   ({ photos, onClose, placeName, selectedLocation, onShare }) => {
     const [activeIndex, setActiveIndex] = useState(null);
@@ -1759,10 +1779,10 @@ export const PhotoGallery = React.memo(
         </header>
 
         {/* ======================================================
-            SEO CONTEXT BLOCK
+            SEO CONTEXT BLOCK (VISUALLY HIDDEN FOR END USERS, ACCESSIBLE TO CRAWLERS)
             ====================================================== */}
         {(selectedLocation?.description || selectedLocation?.ai_article?.story) && (
-          <div className="px-6 pt-4 pb-2 text-slate-500 text-xs max-w-3xl leading-relaxed shrink-0">
+          <div className="sr-only">
             <p>{selectedLocation.description || selectedLocation.ai_article.story}</p>
           </div>
         )}
