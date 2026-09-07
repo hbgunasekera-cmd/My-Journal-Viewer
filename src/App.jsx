@@ -449,7 +449,8 @@ export const generateSlug = (name) => {
     .replace(/[–—]/g, '-')              // Convert En-dash & Em-dash to standard hyphens
     .replace(/[^a-z0-9\s-]/g, '')       // Keep only alphanumeric characters, spaces, and hyphens
     .replace(/\s+/g, '-')               // Replace spaces with single hyphens
-    .replace(/-+/g, '-');               // Collapse multiple hyphens
+    .replace(/-+/g, '-')                // Collapse multiple hyphens
+    .replace(/^-+|-+$/g, '');           // Strip leading and trailing hyphens
 };
 
 /**
@@ -484,7 +485,7 @@ export const truncateText = (text, maxLength = 155) => {
 /**
  * Injects or updates Schema.org JSON-LD structured data with XSS prevention
  */
-export const injectJSONLDSchema = (place, canonicalUrl) => {
+export const injectJSONLDSchema = (place, canonicalUrl, isGallery = false) => {
   let schemaScript = document.getElementById('json-ld-schema');
 
   if (!schemaScript) {
@@ -494,13 +495,15 @@ export const injectJSONLDSchema = (place, canonicalUrl) => {
     document.head.appendChild(schemaScript);
   }
 
+  const BASE_URL = "https://www.myjournalview.com";
+
   // Default website schema for home/fallback contexts
   if (!place || typeof place !== 'object' || !place.place_name) {
     const defaultSchema = {
       "@context": "https://schema.org",
       "@type": "WebSite",
       "name": "My Journal",
-      "url": canonicalUrl || "https://www.myjournalview.com",
+      "url": canonicalUrl || BASE_URL,
       "description": "Explore remote Sri Lankan trails, hidden waterfalls, and backcountry coordinates.",
       "abstract": "විදිමු , රැකගමු අනාගතය වෙනුවෙන්. Live with care, preserve with love — for the future yet to come."
     };
@@ -523,41 +526,58 @@ export const injectJSONLDSchema = (place, canonicalUrl) => {
     place.description ||
     `Explore ${place.place_name} in ${place.locality || 'Sri Lanka'}.`;
 
-  const schemaData = {
-    "@context": "https://schema.org",
-    "@type": "TouristAttraction",
-    "name": place.place_name,
-    "description": description,
-    "url": canonicalUrl,
-    "image": place.cover_photo_url || "https://www.myjournalview.com/my-journal-logo.png",
-    "location": {
-      "@type": "Place",
-      "name": place.locality || "Sri Lanka",
-      "geo": (place.latitude && place.longitude) ? {
-        "@type": "GeoCoordinates",
-        "latitude": place.latitude,
-        "longitude": place.longitude
-      } : undefined,
-      "elevation": metrics.elevation_m ? `${metrics.elevation_m} m` : undefined
-    },
-    "additionalProperty": [
-      metrics.difficulty_level && {
-        "@type": "PropertyValue",
-        "name": "Trail Difficulty",
-        "value": metrics.difficulty_level
+  let schemaData;
+
+  if (isGallery) {
+    schemaData = {
+      "@context": "https://schema.org",
+      "@type": "ImageGallery",
+      "name": `${place.place_name || 'Gallery'} Photos`,
+      "description": description,
+      "url": canonicalUrl,
+      "primaryImageOfPage": place.cover_photo_url || `${BASE_URL}/my-journal-logo.png`
+    };
+  } else {
+    schemaData = {
+      "@context": "https://schema.org",
+      "@type": "TouristAttraction",
+      "name": place.place_name,
+      "description": description,
+      "url": canonicalUrl,
+      "image": place.cover_photo_url || `${BASE_URL}/my-journal-logo.png`,
+      "location": {
+        "@type": "Place",
+        "name": place.locality || "Sri Lanka",
+        "address": {
+          "@type": "PostalAddress",
+          "addressCountry": "LK"
+        },
+        "geo": (place.latitude && place.longitude) ? {
+          "@type": "GeoCoordinates",
+          "latitude": place.latitude,
+          "longitude": place.longitude
+        } : undefined,
+        "elevation": metrics.elevation_m ? `${metrics.elevation_m} m` : undefined
       },
-      metrics.trek_distance_km && {
-        "@type": "PropertyValue",
-        "name": "Trek Distance",
-        "value": `${metrics.trek_distance_km} km`
-      },
-      metrics.estimated_time_mins && {
-        "@type": "PropertyValue",
-        "name": "Estimated Time",
-        "value": `${metrics.estimated_time_mins} mins`
-      }
-    ].filter(Boolean)
-  };
+      "additionalProperty": [
+        metrics.difficulty_level && {
+          "@type": "PropertyValue",
+          "name": "Trail Difficulty",
+          "value": metrics.difficulty_level
+        },
+        metrics.trek_distance_km && {
+          "@type": "PropertyValue",
+          "name": "Trek Distance",
+          "value": `${metrics.trek_distance_km} km`
+        },
+        metrics.estimated_time_mins && {
+          "@type": "PropertyValue",
+          "name": "Estimated Time",
+          "value": `${metrics.estimated_time_mins} mins`
+        }
+      ].filter(Boolean)
+    };
+  }
 
   // Prevent XSS script tag escape breakout by escaping '<'
   schemaScript.textContent = JSON.stringify(schemaData).replace(/</g, '\\u003c');
@@ -688,8 +708,8 @@ export const updateSEO = (place = null, options = {}) => {
     el.setAttribute('content', content || '');
   });
 
-  // Inject structured JSON-LD schema
-  injectJSONLDSchema(place, canonicalUrl);
+  // Inject structured JSON-LD schema with isGallery context flag
+  injectJSONLDSchema(place, canonicalUrl, isGallery);
 };
 
 // =======================================================================
@@ -1366,26 +1386,16 @@ export const PhotoGallery = React.memo(
         const locationObj =
           selectedLocation || { place_name: placeName };
 
-        updateSEO(locationObj, { isGallery: true });
+        updateSEO(locationObj, {
+          isGallery: true,
+          galleryPhotos: photos
+        });
       }
-    }, [selectedLocation, placeName]);
+    }, [selectedLocation, placeName, photos]);
 
     /*
      * ============================================================
      * PHOTO GALLERY MODAL + URL LIFECYCLE
-     *
-     * Opening gallery:
-     *   /                       -> /gallery/place-name
-     *   /place/place-name      -> /gallery/place-name
-     *
-     * Browser Back:
-     *   /gallery/place-name    -> previous URL + closes gallery
-     *
-     * Explicit X:
-     *   -> / + closes gallery
-     *
-     * IMPORTANT:
-     * Cleanup NEVER modifies browser history.
      * ============================================================
      */
     useEffect(() => {
@@ -1400,25 +1410,10 @@ export const PhotoGallery = React.memo(
       if (locationObj?.place_name) {
         const rawName = String(locationObj.place_name);
 
-        const gallerySlug =
-          typeof generateSlug === 'function'
-            ? generateSlug(rawName)
-            : rawName
-              .toLowerCase()
-              .trim()
-              .replace(/[^\w\s-]/g, '')
-              .replace(/[\s_-]+/g, '-')
-              .replace(/^-+|-+$/g, '');
+        const gallerySlug = generateSlug(rawName);
 
         const galleryPath = `/gallery/${gallerySlug}`;
 
-        /*
-         * Only push a new history entry when we are not
-         * already on the gallery URL.
-         *
-         * This is important for direct deep links such as:
-         * /gallery/diyaluma-falls
-         */
         if (window.location.pathname !== galleryPath) {
           window.history.pushState(
             {
@@ -1432,12 +1427,6 @@ export const PhotoGallery = React.memo(
         }
       }
 
-      /*
-       * Browser Back closes the Photo Gallery.
-       *
-       * Do NOT call history.pushState() here.
-       * The browser has already changed the URL.
-       */
       const handlePopState = () => {
         if (typeof onClose === 'function') {
           onClose();
@@ -1454,14 +1443,6 @@ export const PhotoGallery = React.memo(
           'popstate',
           handlePopState
         );
-
-        /*
-         * IMPORTANT:
-         * No history manipulation here.
-         *
-         * The old implementation could cause URL/history
-         * inconsistencies when the component re-rendered.
-         */
       };
     }, [selectedLocation, placeName, onClose]);
 
@@ -1678,10 +1659,6 @@ export const PhotoGallery = React.memo(
     /*
      * ============================================================
      * CLOSE GALLERY
-     *
-     * Explicit X always returns to root.
-     *
-     * Browser Back is handled separately by popstate above.
      * ============================================================
      */
     const handleCloseGallery = (e) => {
@@ -1689,10 +1666,6 @@ export const PhotoGallery = React.memo(
         e.stopPropagation();
       }
 
-      /*
-       * Only manipulate the URL if we are currently
-       * on the gallery route.
-       */
       if (
         window.location.pathname.startsWith(
           '/gallery/'
@@ -1707,14 +1680,8 @@ export const PhotoGallery = React.memo(
         );
       }
 
-      /*
-       * Restore default SEO.
-       */
       updateSEO(null);
 
-      /*
-       * Close the React modal.
-       */
       if (typeof onClose === 'function') {
         onClose();
       }
@@ -1744,7 +1711,7 @@ export const PhotoGallery = React.memo(
         {/* ======================================================
             HEADER
             ====================================================== */}
-        <header className="flex justify-between items-center p-6 border-b border-white/10 shrink-0">
+        <header className="flex justify-between items-center p-6 border-b border-slate-100 shrink-0">
           <div>
             <h3 className="text-slate-600 font-black uppercase tracking-widest text-xs">
               {placeName
@@ -1792,6 +1759,15 @@ export const PhotoGallery = React.memo(
         </header>
 
         {/* ======================================================
+            SEO CONTEXT BLOCK
+            ====================================================== */}
+        {(selectedLocation?.description || selectedLocation?.ai_article?.story) && (
+          <div className="px-6 pt-4 pb-2 text-slate-500 text-xs max-w-3xl leading-relaxed shrink-0">
+            <p>{selectedLocation.description || selectedLocation.ai_article.story}</p>
+          </div>
+        )}
+
+        {/* ======================================================
             PHOTO GRID
             ====================================================== */}
         <main
@@ -1830,7 +1806,7 @@ export const PhotoGallery = React.memo(
                       : 'auto'
                   }
                   draggable={false}
-                  alt={`${placeName || 'Adventure'} - Image ${i + 1}`}
+                  alt={`${placeName || 'Remote location'} ${selectedLocation?.category ? `(${selectedLocation.category})` : ''} in ${selectedLocation?.locality || 'Sri Lanka'} - High resolution image ${i + 1}`}
                 />
               </article>
             ))}
@@ -2392,15 +2368,9 @@ export const MapComponent = ({
     return categoryColors[category] || '#64748b';
   };
 
-  // Helper to generate clean URL slugs
   const getSlug = (item) => {
     const text = item.place_name || item.name || item.slug || '';
-    return text
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    return generateSlug(text);
   };
 
   // Helper to standardise line rendering across services
@@ -3819,15 +3789,7 @@ function App() {
       ];
 
       // Slug helper fallback
-      const createSlug = (text) => {
-        if (typeof generateSlug === 'function') return generateSlug(text);
-        return (text || '')
-          .toLowerCase()
-          .trim()
-          .replace(/[^\w\s-]/g, '')
-          .replace(/[\s_-]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-      };
+      const createSlug = (text) => generateSlug(text);
 
       // Helper mapper for formatting place objects cleanly with consistent URL slugs
       const mapPlaceData = (place, categoryType) => {
@@ -4528,7 +4490,7 @@ function App() {
     if (e) e.stopPropagation();
     if (!place) return;
 
-    const slug = encodeURIComponent(place.place_name.trim().replace(/\s+/g, '-'));
+    const slug = generateSlug(place.place_name);
     const url = `${window.location.origin}/${isGallery ? 'gallery' : 'place'}/${slug}`;
     const shareText = isGallery
       ? `Explore the photo gallery for ${place.place_name} on My Journal: ${url}`

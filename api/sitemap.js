@@ -1,5 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 
+// Helper to generate standardized, clean, SEO-friendly URL slugs matching App.jsx
+function generateSlug(name) {
+  if (!name) return "";
+  return String(name)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[–—]/g, "-")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 // Helper to safely escape specific XML characters in slugs to prevent broken sitemaps
 function escapeXml(unsafe) {
   return String(unsafe).replace(/[<>&'"]/g, function (c) {
@@ -109,11 +124,8 @@ export default async function handler(req, res) {
     if (places.length > 0) {
       places.forEach((place) => {
         if (place.place_name) {
-          // Format slug identically to the React Router path, then escape for XML
-          const rawSlug = encodeURIComponent(
-            place.place_name.trim().replace(/\s+/g, "-")
-          );
-          const cleanSlug = escapeXml(rawSlug);
+          // Standardize slug format using generateSlug and escape for XML
+          const cleanSlug = escapeXml(generateSlug(place.place_name));
 
           // Use created_at or fallback to today
           const lastMod = place.created_at
