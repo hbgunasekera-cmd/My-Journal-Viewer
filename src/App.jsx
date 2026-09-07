@@ -2040,10 +2040,16 @@ export const getYouTubeId = (url) => {
 };
 
 
-export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
+export const HubVideoList = ({ supabaseClient, onVideosLoaded, enableShuffle = false }) => {
   const [videos, setVideos] = useState([]);
+  const onVideosLoadedRef = useRef(onVideosLoaded);
 
-  // Helper function to shuffle the array (Fisher-Yates algorithm)
+  // Keep callback ref updated without triggering re-fetch effect loops
+  useEffect(() => {
+    onVideosLoadedRef.current = onVideosLoaded;
+  }, [onVideosLoaded]);
+
+  // Helper function to shuffle array (only used if enableShuffle is true)
   const shuffleArray = (array) => {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -2058,7 +2064,7 @@ export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
 
     const fetchVideos = async () => {
       if (!supabaseClient) {
-        if (onVideosLoaded) onVideosLoaded([]);
+        if (onVideosLoadedRef.current) onVideosLoadedRef.current([]);
         return;
       }
 
@@ -2067,40 +2073,28 @@ export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
           .from('hub_videos')
           .select('id, url, title, custom_thumbnail_url')
           .eq('is_active', true)
-          // You can optionally remove these .order() clauses now to speed up the DB query, 
-          // since the client will randomize the final array anyway.
-          .order('display_order', {
-            ascending: false,
-            nullsFirst: false
-          })
-          .order('created_at', {
-            ascending: false
-          });
+          .order('display_order', { ascending: true, nullsFirst: false })
+          .order('id', { ascending: true }); // Primary sequence fallback by ID instead of created_at
 
         if (!error && data && isSubscribed) {
-          // SHUFFLE IMPLEMENTATION: Randomize the database records
-          const randomizedData = shuffleArray(data);
+          const finalData = enableShuffle ? shuffleArray(data) : data;
+          setVideos(finalData);
 
-          setVideos(randomizedData);
-
-          if (onVideosLoaded) {
-            onVideosLoaded(randomizedData);
+          if (onVideosLoadedRef.current) {
+            onVideosLoadedRef.current(finalData);
           }
         } else if (isSubscribed) {
           setVideos([]);
-
-          if (onVideosLoaded) {
-            onVideosLoaded([]);
+          if (onVideosLoadedRef.current) {
+            onVideosLoadedRef.current([]);
           }
         }
       } catch (err) {
         console.error("Error loading hub videos:", err);
-
         if (isSubscribed) {
           setVideos([]);
-
-          if (onVideosLoaded) {
-            onVideosLoaded([]);
+          if (onVideosLoadedRef.current) {
+            onVideosLoadedRef.current([]);
           }
         }
       }
@@ -2111,7 +2105,7 @@ export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
     return () => {
       isSubscribed = false;
     };
-  }, [supabaseClient, onVideosLoaded]);
+  }, [supabaseClient, enableShuffle]);
 
   return null;
 };
