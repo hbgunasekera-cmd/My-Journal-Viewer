@@ -2043,6 +2043,16 @@ export const getYouTubeId = (url) => {
 export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
   const [videos, setVideos] = useState([]);
 
+  // Helper function to shuffle the array (Fisher-Yates algorithm)
+  const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   useEffect(() => {
     let isSubscribed = true;
 
@@ -2057,6 +2067,8 @@ export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
           .from('hub_videos')
           .select('id, url, title, custom_thumbnail_url')
           .eq('is_active', true)
+          // You can optionally remove these .order() clauses now to speed up the DB query, 
+          // since the client will randomize the final array anyway.
           .order('display_order', {
             ascending: false,
             nullsFirst: false
@@ -2066,10 +2078,13 @@ export const HubVideoList = ({ supabaseClient, onVideosLoaded }) => {
           });
 
         if (!error && data && isSubscribed) {
-          setVideos(data);
+          // SHUFFLE IMPLEMENTATION: Randomize the database records
+          const randomizedData = shuffleArray(data);
+
+          setVideos(randomizedData);
 
           if (onVideosLoaded) {
-            onVideosLoaded(data);
+            onVideosLoaded(randomizedData);
           }
         } else if (isSubscribed) {
           setVideos([]);
