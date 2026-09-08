@@ -608,7 +608,9 @@ export const updateSEO = (place = null, options = {}) => {
     galleryPhotos = [],
     category = 'All',
     searchTerm = '',
-    categoryDescriptions = {}
+    categoryDescriptions = {},
+    isNotFound = false, // Flag passed when route/ID fails to match data
+    isLoading = false
   } = typeof options === 'boolean' ? { isGallery: options } : options;
 
   const BASE_URL = (
@@ -621,12 +623,19 @@ export const updateSEO = (place = null, options = {}) => {
   let title = "Sri Lanka Backcountry Travel Guide & Maps | My Journal";
   let ogTitle = "Sri Lanka Backcountry Travel Guide: Waterfalls, Hidden Trails & Maps";
   let description = "Explore remote Sri Lankan trails, hidden waterfalls, coordinates, and high-altitude mountain lookouts captured by Drone and iPhone.";
-  let canonicalUrl = `${BASE_URL}/`;
+  let rawCanonicalUrl = `${BASE_URL}/`;
   let imageUrl = DEFAULT_LOGO;
+  let isNoIndex = false;
 
   const hasPlace = Boolean(place && typeof place === 'object' && place.place_name);
 
-  if (hasPlace) {
+  // 1. Handle Soft-404 / Missing Data States
+  if (isNotFound && !isLoading) {
+    title = "Page Not Found | My Journal";
+    ogTitle = "404 - Page Not Found";
+    description = "The requested location, gallery, or resource could not be found on My Journal.";
+    isNoIndex = true;
+  } else if (hasPlace) {
     const placeName = place.place_name.trim();
     const categoryName = place.category || 'Attraction';
     const localityName = place.locality ? `, ${place.locality}` : '';
@@ -641,7 +650,7 @@ export const updateSEO = (place = null, options = {}) => {
         ? truncateText(`Photo gallery of ${placeName}${localityName}. ${rawStory}`, 155)
         : `Browse high-resolution photo gallery and drone perspectives of ${placeName}${localityName}, Sri Lanka. Field notes and route details included.`;
 
-      canonicalUrl = `${BASE_URL}/gallery/${slug}`;
+      rawCanonicalUrl = `${BASE_URL}/gallery/${slug}`;
     } else {
       title = `${placeName} ${categoryName} Guide${localityName} Sri Lanka | My Journal`;
       ogTitle = `${placeName} ${categoryName} Guide: Mapped Coordinates & Trail Access`;
@@ -652,7 +661,7 @@ export const updateSEO = (place = null, options = {}) => {
       } else {
         description = `Complete travel & trail guide for ${placeName} in ${place.locality || 'Sri Lanka'}. Mapped coordinates, elevation telemetry, and visitor access notes.`;
       }
-      canonicalUrl = `${BASE_URL}/place/${slug}`;
+      rawCanonicalUrl = `${BASE_URL}/place/${slug}`;
     }
 
     if (place.cover_photo_url) {
@@ -670,7 +679,7 @@ export const updateSEO = (place = null, options = {}) => {
     description = catDesc
       ? truncateText(catDesc, 155)
       : `Explore mapped ${category.toLowerCase()} locations across Sri Lanka with exact coordinates, weather tracking, and access details.`;
-    canonicalUrl = `${BASE_URL}/?category=${encodeURIComponent(category.toLowerCase())}`;
+    rawCanonicalUrl = `${BASE_URL}/?category=${encodeURIComponent(category.toLowerCase())}`;
 
   } else if (searchTerm) {
     title = `Search Results for "${searchTerm}" | Sri Lanka Travel Logs`;
@@ -678,7 +687,21 @@ export const updateSEO = (place = null, options = {}) => {
     description = `Explore mapped locations, trails, and field notes matching "${searchTerm}" in Sri Lanka on My Journal.`;
   }
 
-  // Enforce SERP snippet safety (truncate title if exceeding 65 chars)
+  // 2. Canonical URL Normalization (Cleans tracking params & query pollution)
+  let canonicalUrl = rawCanonicalUrl;
+  try {
+    const cleanUrl = new URL(rawCanonicalUrl);
+    cleanUrl.searchParams.delete('utm_source');
+    cleanUrl.searchParams.delete('utm_medium');
+    cleanUrl.searchParams.delete('utm_campaign');
+    cleanUrl.searchParams.delete('fbclid');
+    canonicalUrl = cleanUrl.toString().replace(/\/$/, ""); // Strips trailing slashes
+  } catch (e) {
+    // Fallback to raw canonical if URL parsing fails
+    canonicalUrl = rawCanonicalUrl;
+  }
+
+  // 3. Enforce SERP Snippet Safety (Truncate title if exceeding 65 chars)
   if (title.length > 65) {
     const brandIndex = title.indexOf(' | My Journal');
     if (brandIndex > 0) {
@@ -687,10 +710,10 @@ export const updateSEO = (place = null, options = {}) => {
     }
   }
 
-  // Sync document title
+  // 4. Sync Document Title
   document.title = title;
 
-  // Sync canonical link element
+  // 5. Sync Canonical Link Element
   let canonicalEl = document.querySelector('link[rel="canonical"]');
   if (!canonicalEl) {
     canonicalEl = document.createElement('link');
@@ -699,10 +722,10 @@ export const updateSEO = (place = null, options = {}) => {
   }
   canonicalEl.setAttribute('href', canonicalUrl);
 
-  // Sync Meta & OpenGraph tags
+  // 6. Sync Meta & OpenGraph Tags (Including soft-404 noindex check)
   const metaTags = {
     'fb:app_id': '966242223397117',
-    'robots': 'index, follow, max-image-preview:large',
+    'robots': isNoIndex ? 'noindex, follow' : 'index, follow, max-image-preview:large',
     'description': description,
     'og:title': ogTitle,
     'og:description': description,
@@ -729,8 +752,10 @@ export const updateSEO = (place = null, options = {}) => {
     el.setAttribute('content', content || '');
   });
 
-  // Inject structured JSON-LD schema with isGallery context flag and gallery photos
-  injectJSONLDSchema(place, canonicalUrl, isGallery, galleryPhotos);
+  // 7. Inject Structured JSON-LD Schema (Skipped on 404 routes)
+  if (!isNoIndex && typeof injectJSONLDSchema === 'function') {
+    injectJSONLDSchema(place, canonicalUrl, isGallery, galleryPhotos);
+  }
 };
 
 // =======================================================================
