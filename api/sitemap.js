@@ -6,13 +6,13 @@ function generateSlug(name) {
   return String(name)
     .toLowerCase()
     .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[–—]/g, "-")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .normalize("NFD")                    // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, "")    // Strip diacritic mark overlays
+    .replace(/[–—]/g, "-")              // Convert En-dash & Em-dash to standard hyphens
+    .replace(/[^a-z0-9\s-]/g, "")       // Keep only alphanumeric characters, spaces, and hyphens
+    .replace(/\s+/g, "-")               // Replace spaces with single hyphens
+    .replace(/-+/g, "-")                // Collapse multiple hyphens
+    .replace(/^-+|-+$/g, "");           // Strip leading and trailing hyphens
 }
 
 // Helper to safely escape specific XML characters in slugs to prevent broken sitemaps

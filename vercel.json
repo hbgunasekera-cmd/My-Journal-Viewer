@@ -10,6 +10,13 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/old-path-example",
+      "destination": "/new-path-example",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
